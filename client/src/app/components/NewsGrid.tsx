@@ -24,7 +24,7 @@ export function NewsGrid() {
       setError(null);
       try {
         const category = selectedCategory === 'all' ? 'all' : selectedCategory;
-        const response = await newsAPI.getTopHeadlines(category, 200, 1);
+        const response = await newsAPI.getTopHeadlines(category, 500, 1);
 
         if (response.success && response.data?.articles) {
           let filtered = response.data.articles;
@@ -36,9 +36,19 @@ export function NewsGrid() {
               a =>
                 a.title.toLowerCase().includes(query) ||
                 (a.description?.toLowerCase().includes(query) || false) ||
+                a.aiSummary?.toLowerCase().includes(query) ||
                 a.source.name.toLowerCase().includes(query) ||
+                (a.source.domain?.toLowerCase().includes(query) || false) ||
+                (a.author?.toLowerCase().includes(query) || false) ||
                 a.topic.toLowerCase().includes(query) ||
-                a.sentiment.type.toLowerCase().includes(query)
+                a.sentiment.type.toLowerCase().includes(query) ||
+                (a.section?.toLowerCase().includes(query) || false) ||
+                (a.aiTopLabel?.toLowerCase().includes(query) || false) ||
+                a.keywords.some((keyword) => keyword.toLowerCase().includes(query)) ||
+                a.metaTags.some((tag) => tag.toLowerCase().includes(query)) ||
+                a.entities.persons.some((person) => person.toLowerCase().includes(query)) ||
+                a.entities.organizations.some((organization) => organization.toLowerCase().includes(query)) ||
+                a.entities.locations.some((location) => location.toLowerCase().includes(query))
             );
           }
 

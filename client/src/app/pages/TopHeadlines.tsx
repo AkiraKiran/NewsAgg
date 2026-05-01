@@ -16,7 +16,7 @@ export function TopHeadlines() {
     const fetchHeadlines = async () => {
       try {
         setLoading(true);
-        const response = await newsAPI.getTopHeadlines('general', 80, 1);
+        const response = await newsAPI.getTopHeadlines('all', 80, 1);
         if (response.success && response.data?.articles) {
           setArticles(response.data.articles);
         } else {

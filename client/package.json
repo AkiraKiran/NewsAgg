@@ -48,11 +48,11 @@
     "lucide-react": "^1.8.0",
     "motion": "^12.38.0",
     "next-themes": "0.4.6",
-    "react": "^19.2.5",
+    "react": "^18.3.1",
     "react-day-picker": "^9.14.0",
     "react-dnd": "16.0.1",
     "react-dnd-html5-backend": "16.0.1",
-    "react-dom": "^19.2.5",
+    "react-dom": "^18.3.1",
     "react-hook-form": "^7.73.1",
     "react-popper": "2.3.0",
     "react-resizable-panels": "^4.10.0",
@@ -67,8 +67,12 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "tailwindcss": "^4.2.4",
+    "typescript": "^6.0.3",
     "vite": "^8.0.9"
   },
   "pnpm": {

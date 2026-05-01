@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock3, PlayCircle, TrendingUp } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
+import { TOPIC_BADGE_CLASS } from '../constants';
 import { getArticleId, newsAPI, NewsArticle, SentimentType } from '../services/newsAPI';
 
 interface SentimentBadgeProps {
@@ -64,6 +65,14 @@ export function HeroCarousel({ scrollY }: HeroCarouselProps) {
   const prev = () => setCurrent(p => (p - 1 + headlines.length) % headlines.length);
   const next = () => setCurrent(p => (p + 1) % headlines.length);
 
+  const formatDate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    return date.toLocaleDateString();
+  };
+
   if (loading || headlines.length === 0) {
     return (
       <div style={{ height: `${heroHeight}px` }} className={`${isDark ? 'bg-slate-800' : 'bg-gray-100'} transition-all duration-300 flex items-center justify-center`}>
@@ -76,6 +85,8 @@ export function HeroCarousel({ scrollY }: HeroCarouselProps) {
   }
 
   const article = headlines[current];
+  const preview = article.aiSummary || article.description || 'No summary available';
+  const topicClass = TOPIC_BADGE_CLASS[article.topic];
 
   return (
     <div
@@ -95,7 +106,7 @@ export function HeroCarousel({ scrollY }: HeroCarouselProps) {
           className="absolute inset-0"
         >
           <img
-            src={article.urlToImage || 'https://via.placeholder.com/800x400?text=No+Image'}
+            src={article.urlToImage || article.images[0]?.url || 'https://via.placeholder.com/800x400?text=No+Image'}
             alt={article.title}
             className="w-full h-full object-cover"
           />
@@ -128,24 +139,40 @@ export function HeroCarousel({ scrollY }: HeroCarouselProps) {
             <Link to={`/article/${getArticleId(article)}`} className="block group">
               <div className="flex items-center gap-2 mb-2">
                 <SentimentBadge sentiment={article.sentiment.type} />
-                <span className="text-white/75 text-xs font-semibold">{article.topic}</span>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${topicClass}`}>{article.topic}</span>
                 <span className="text-white/70 text-xs">{article.source.name}</span>
+                {article.section && (
+                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white/85 backdrop-blur-sm">
+                    {article.section}
+                  </span>
+                )}
+                {article.videoUrl && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+                    <PlayCircle size={12} />
+                    Video
+                  </span>
+                )}
               </div>
               <h2 className="text-white text-4xl md:text-5xl font-bold leading-tight mb-2 group-hover:text-cyan-300 transition-colors" style={{ fontFamily: 'Poppins, sans-serif' }}>
                 {article.title}
               </h2>
               <p className="text-white/75 text-sm line-clamp-2 mb-3 max-w-2xl">
-                {article.description || 'No description available'}
+                {preview}
               </p>
-              <div className="flex items-center gap-4 text-white/60 text-xs">
+              <div className="flex items-center gap-4 text-white/60 text-xs flex-wrap">
                 <span>{t.author}: {article.author || 'Unknown'}</span>
-                <span>{t.publishedAt}: {new Date(article.publishedAt).toLocaleDateString()}</span>
+                <span>{t.publishedAt}: {formatDate(article.publishedAt)}</span>
+                <span className="inline-flex items-center gap-1">
+                  <Clock3 size={12} />
+                  {article.readability.readingTimeMin > 0 ? `${article.readability.readingTimeMin} min read` : 'Quick read'}
+                </span>
               </div>
             </Link>
           ) : (
             <Link to={`/article/${getArticleId(article)}`} className="flex items-center gap-3 group">
               <div className="flex items-center gap-2 min-w-0">
                 <SentimentBadge sentiment={article.sentiment.type} />
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${topicClass}`}>{article.topic}</span>
                 <span className="text-white font-semibold text-sm truncate group-hover:text-cyan-300 transition-colors">{article.title}</span>
               </div>
               <span className="text-white/60 text-xs flex-shrink-0">{article.source.name}</span>

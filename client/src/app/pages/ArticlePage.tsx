@@ -1,9 +1,28 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { motion } from 'motion/react';
-import { ArrowLeft, Building2, Calendar, Clock3, Globe, MapPin, Tag, TrendingUp, User, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  Building2,
+  Calendar,
+  Clock3,
+  ExternalLink,
+  Gauge,
+  Globe,
+  Languages,
+  Link2,
+  MapPin,
+  PlayCircle,
+  ShieldAlert,
+  Sparkles,
+  Tag,
+  TrendingUp,
+  User,
+  Users,
+} from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useApp } from '../contexts/AppContext';
+import { CATEGORY_BADGE_CLASS, CATEGORY_LABELS, TOPIC_TO_CATEGORY } from '../constants';
 import { ImageWithFallback } from '../components/utils/ImageWithFallback';
 import { ArticleSentimentPanel } from '../components/ArticleSentimentPanel';
 import {
@@ -43,12 +62,6 @@ const SENTIMENT_CHART_COLORS: Record<SentimentType, string> = {
   positive: '#10b981',
   neutral: '#6b7280',
   negative: '#ef4444',
-};
-
-const TOPIC_TO_CATEGORY: Record<NewsArticle['topic'], NewsCategoryFilter> = {
-  Politics: 'politics',
-  Sport: 'sport',
-  Business: 'business',
 };
 
 const sentimentTextClass: Record<SentimentType, string> = {
@@ -109,6 +122,31 @@ const formatCount = (value: number): string => {
   return String(value);
 };
 
+const formatPercent = (value?: number): string => (
+  typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : 'N/A'
+);
+
+const formatHost = (value: string): string => {
+  try {
+    return new URL(value).hostname.replace(/^www\./, '');
+  } catch {
+    return value;
+  }
+};
+
+const formatAccessStatus = (article: NewsArticle): string => {
+  if (article.isPremium) {
+    return 'Premium';
+  }
+  if (article.isAccessibleFree === true) {
+    return 'Free access';
+  }
+  if (article.isAccessibleFree === false) {
+    return 'Restricted';
+  }
+  return 'Unknown';
+};
+
 interface EntityBlockProps {
   title: string;
   values: string[];
@@ -137,6 +175,22 @@ function EntityBlock({ title, values, icon, isDark }: EntityBlockProps) {
       ) : (
         <p className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>None listed</p>
       )}
+    </div>
+  );
+}
+
+interface MetricRowProps {
+  label: string;
+  value: string;
+  isDark: boolean;
+  accentClass?: string;
+}
+
+function MetricRow({ label, value, isDark, accentClass }: MetricRowProps) {
+  return (
+    <div className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${isDark ? 'bg-slate-900/40' : 'bg-gray-50/80'}`}>
+      <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{label}</span>
+      <span className={`text-sm font-semibold ${accentClass ?? (isDark ? 'text-slate-100' : 'text-gray-900')}`}>{value}</span>
     </div>
   );
 }
@@ -230,6 +284,11 @@ export function ArticlePage() {
     [articleCategory]
   );
 
+  const categoryArticlePreview = useMemo(
+    () => categoryArticles.slice(0, 12),
+    [categoryArticles]
+  );
+
   const categoryTrendingKeywords = useMemo(
     () => getTrendingKeywords(8, articleCategory),
     [articleCategory]
@@ -249,7 +308,7 @@ export function ArticlePage() {
     return (
       <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto">
         <div className={`flex flex-col items-center justify-center py-20 ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
-          <div className="animate-spin text-3xl mb-4">⏳</div>
+          <div className="animate-spin text-3xl mb-4">Loading</div>
           <p className="text-lg font-medium">Loading article...</p>
         </div>
       </div>
@@ -275,7 +334,7 @@ export function ArticlePage() {
           animate={{ opacity: 1, y: 0 }}
           className={`text-center py-20 rounded-2xl border ${panelBase}`}
         >
-          <div className="text-6xl mb-4">📰</div>
+          <div className="text-6xl mb-4">News</div>
           <h2 className={`text-2xl font-bold mb-2 ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>Article Not Found</h2>
           <p className={`mb-6 ${mutedText}`}>{error}</p>
           <Link
@@ -290,6 +349,8 @@ export function ArticlePage() {
   }
 
   const sentimentStyle = SENTIMENT_STYLE[article.sentiment.type];
+  const topicBadgeClass = CATEGORY_BADGE_CLASS[TOPIC_TO_CATEGORY[article.topic]];
+  const galleryImages = article.images.filter((image) => image.url !== article.urlToImage).slice(0, 3);
 
   return (
     <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto">
@@ -304,7 +365,7 @@ export function ArticlePage() {
         </button>
       </motion.div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
         <motion.article
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -313,18 +374,47 @@ export function ArticlePage() {
         >
           <div className="relative rounded-2xl overflow-hidden h-72 md:h-96 mb-5 shadow-lg">
             <ImageWithFallback
-              src={article.urlToImage || undefined}
+              src={article.urlToImage || article.images[0]?.url || undefined}
               alt={article.title}
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-            <div className="absolute top-3 left-3 flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-600 text-white">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent" />
+            <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2">
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${topicBadgeClass}`}>
                 {article.topic}
               </span>
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${sentimentStyle.badge}`}>
                 {article.sentiment.type}
               </span>
+              {article.section && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-black/35 text-white backdrop-blur-sm">
+                  {article.section}
+                </span>
+              )}
+              {article.videoUrl && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-black/35 text-white backdrop-blur-sm">
+                  <PlayCircle size={12} />
+                  Video
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            {article.source.logo && (
+              <img
+                src={article.source.logo}
+                alt={article.source.name}
+                className={`w-10 h-10 rounded-full object-cover ${isDark ? 'bg-slate-900/80' : 'bg-white border border-gray-100'}`}
+              />
+            )}
+            <div className="min-w-0">
+              <p className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
+                {article.source.name}
+              </p>
+              <p className={`text-xs ${mutedText}`}>
+                {CATEGORY_LABELS[TOPIC_TO_CATEGORY[article.topic]]} coverage
+              </p>
             </div>
           </div>
 
@@ -345,6 +435,16 @@ export function ArticlePage() {
               <Globe size={14} className={mutedText} />
               <span className={bodyText}>{article.source.name}</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <Clock3 size={14} className={mutedText} />
+              <span className={bodyText}>{article.readability.readingTimeMin > 0 ? `${article.readability.readingTimeMin} min read` : 'Quick read'}</span>
+            </div>
+            {article.language && (
+              <div className="flex items-center gap-1.5">
+                <Languages size={14} className={mutedText} />
+                <span className={bodyText}>{article.language.toUpperCase()}</span>
+              </div>
+            )}
           </div>
 
           {article.description && (
@@ -353,22 +453,77 @@ export function ArticlePage() {
             </p>
           )}
 
+          {article.aiSummary && (
+            <div className={`rounded-2xl border p-5 mb-6 ${panelBase}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={15} className="text-cyan-500" />
+                <h2 className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
+                  AI Summary
+                </h2>
+              </div>
+              <p className={`leading-relaxed ${bodyText}`}>
+                {article.aiSummary}
+              </p>
+            </div>
+          )}
+
+          {galleryImages.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+              {galleryImages.map((image) => (
+                <a
+                  key={image.url}
+                  href={image.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`rounded-2xl overflow-hidden border block ${isDark ? 'border-slate-700/50 bg-slate-800/60' : 'border-gray-100 bg-white/70'}`}
+                >
+                  <div className="aspect-[4/3] overflow-hidden">
+                    <ImageWithFallback
+                      src={image.url}
+                      alt={image.alt || article.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  {image.caption && (
+                    <p className={`px-3 py-2 text-xs leading-relaxed ${mutedText}`}>
+                      {image.caption}
+                    </p>
+                  )}
+                </a>
+              ))}
+            </div>
+          )}
+
           <div className={`whitespace-pre-line leading-relaxed mb-8 ${bodyText}`} style={{ fontSize: '1rem', lineHeight: '1.8' }}>
             {article.content || 'No content provided.'}
           </div>
 
           <div className={`rounded-2xl border p-5 ${panelBase}`}>
-            <p className={`text-sm mb-3 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-              Read the original source:
+            <p className={`text-sm mb-4 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+              Continue with the original coverage and any linked media from this source.
             </p>
-            <a
-              href={article.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all text-sm"
-            >
-              {article.source.name}
-            </a>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href={article.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all text-sm"
+              >
+                <ExternalLink size={15} />
+                Read on {article.source.name}
+              </a>
+              {article.videoUrl && (
+                <a
+                  href={article.videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold ${isDark ? 'bg-slate-700 text-slate-100 hover:bg-slate-600' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
+                >
+                  <PlayCircle size={15} />
+                  Watch video
+                </a>
+              )}
+            </div>
           </div>
         </motion.article>
 
@@ -379,6 +534,87 @@ export function ArticlePage() {
           className="space-y-4"
         >
           <ArticleSentimentPanel article={article} isDark={isDark} />
+
+          <div className={`rounded-2xl border p-5 ${panelBase}`}>
+            <h3 className={`text-sm font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-slate-200' : 'text-gray-800'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+              <Sparkles size={14} className="text-cyan-500" />
+              Article Intelligence
+            </h3>
+
+            <div className="space-y-2.5">
+              <MetricRow label="AI relevance" value={formatPercent(article.aiRelevance)} isDark={isDark} accentClass={isDark ? 'text-cyan-300' : 'text-cyan-700'} />
+              <MetricRow label="Top label" value={article.aiTopLabel || 'Unavailable'} isDark={isDark} />
+              <MetricRow label="Sentiment model" value={article.sentiment.model || 'Unknown'} isDark={isDark} />
+              <MetricRow
+                label="Toxicity score"
+                value={`${article.toxicity.label} (${formatPercent(article.toxicity.score)})`}
+                isDark={isDark}
+                accentClass={article.toxicity.score > 0.5 ? 'text-red-500' : isDark ? 'text-slate-100' : 'text-gray-900'}
+              />
+              <MetricRow label="Word count" value={formatCount(article.readability.wordCount)} isDark={isDark} />
+              <MetricRow label="Reading grade" value={article.readability.fleschKincaid.toFixed(1)} isDark={isDark} />
+              <MetricRow label="Flesch score" value={article.readability.fleschScore.toFixed(1)} isDark={isDark} />
+              <MetricRow label="SMOG index" value={article.readability.smogIndex.toFixed(1)} isDark={isDark} />
+            </div>
+          </div>
+
+          <div className={`rounded-2xl border p-5 ${panelBase}`}>
+            <h3 className={`text-sm font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-slate-200' : 'text-gray-800'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+              <Globe size={14} className="text-cyan-500" />
+              Source and Access
+            </h3>
+
+            <div className="space-y-2.5">
+              <MetricRow label="Source" value={article.source.name} isDark={isDark} />
+              <MetricRow label="Domain" value={article.source.domain || formatHost(article.url)} isDark={isDark} />
+              <MetricRow label="Country" value={article.source.country || 'Unknown'} isDark={isDark} />
+              <MetricRow label="Language" value={(article.language || article.source.language || 'Unknown').toUpperCase()} isDark={isDark} />
+              <MetricRow label="Section" value={article.section || 'Unspecified'} isDark={isDark} />
+              <MetricRow label="Access" value={formatAccessStatus(article)} isDark={isDark} />
+              <MetricRow label="Updated" value={article.modifiedAt ? formatPublishedDate(article.modifiedAt) : 'Unavailable'} isDark={isDark} />
+              <MetricRow label="Scraped" value={article.scrapedAt ? formatPublishedDate(article.scrapedAt) : 'Unavailable'} isDark={isDark} />
+            </div>
+          </div>
+
+          <div className={`rounded-2xl border p-5 ${panelBase}`}>
+            <h3 className={`text-sm font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-slate-200' : 'text-gray-800'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+              <Tag size={14} className="text-cyan-500" />
+              Keywords and Tags
+            </h3>
+
+            {article.keywords.length > 0 ? (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {article.keywords.map((keyword) => (
+                  <span
+                    key={`keyword-${keyword}`}
+                    className={`px-2.5 py-1 rounded-full text-xs ${isDark ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-700'}`}
+                  >
+                    #{keyword}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className={`text-sm mb-4 ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                No keywords extracted for this article.
+              </p>
+            )}
+
+            {article.metaTags.length > 0 && (
+              <div>
+                <p className={`text-xs font-medium mb-2 ${mutedText}`}>Meta tags</p>
+                <div className="flex flex-wrap gap-2">
+                  {article.metaTags.map((tagValue) => (
+                    <span
+                      key={`meta-${tagValue}`}
+                      className={`px-2.5 py-1 rounded-full text-xs ${isDark ? 'bg-cyan-500/15 text-cyan-300' : 'bg-cyan-50 text-cyan-700'}`}
+                    >
+                      {tagValue}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className={`rounded-2xl border p-5 ${panelBase}`}>
             <h3 className={`text-sm font-semibold mb-2 ${isDark ? 'text-slate-200' : 'text-gray-800'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
@@ -444,30 +680,6 @@ export function ArticlePage() {
           </div>
 
           <div className={`rounded-2xl border p-5 ${panelBase}`}>
-            <h3 className={`text-sm font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-slate-200' : 'text-gray-800'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
-              <Tag size={14} className="text-cyan-500" />
-              Article Keywords
-            </h3>
-
-            {article.keywords.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {article.keywords.map((keyword) => (
-                  <span
-                    key={`keyword-${keyword}`}
-                    className={`px-2.5 py-1 rounded-full text-xs ${isDark ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-700'}`}
-                  >
-                    #{keyword}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-                No keywords extracted for this article.
-              </p>
-            )}
-          </div>
-
-          <div className={`rounded-2xl border p-5 ${panelBase}`}>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
                 <TrendingUp size={13} className="text-white" />
@@ -521,12 +733,12 @@ export function ArticlePage() {
             </div>
 
             <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
-              {categoryArticles.length === 0 ? (
+              {categoryArticlePreview.length === 0 ? (
                 <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{t.noResults}</p>
               ) : (
-                categoryArticles.map((categoryArticle) => (
+                categoryArticlePreview.map((categoryArticle) => (
                   <Link
-                    key={categoryArticle.url}
+                    key={categoryArticle.id}
                     to={`/article/${getArticleId(categoryArticle)}`}
                     className={`block rounded-xl p-2.5 transition-colors ${isDark ? 'hover:bg-slate-700/60' : 'hover:bg-gray-50'}`}
                   >
@@ -535,7 +747,7 @@ export function ArticlePage() {
                     </p>
                     <div className="flex items-center gap-2 mt-1.5 text-xs flex-wrap">
                       <span className={mutedText}>{formatRelativeTime(categoryArticle.publishedAt)}</span>
-                      <span className={`${isDark ? 'text-slate-400' : 'text-gray-500'}`}>•</span>
+                      <span className={`${isDark ? 'text-slate-400' : 'text-gray-500'}`}>.</span>
                       <span className={sentimentTextClass[categoryArticle.sentiment.type]}>{categoryArticle.sentiment.type}</span>
                     </div>
                   </Link>
@@ -567,7 +779,7 @@ export function ArticlePage() {
                     <p className={`text-sm font-medium line-clamp-1 ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{item.title}</p>
                     <div className="flex items-center gap-2 mt-1 text-[11px] flex-wrap">
                       <span className={`${sentimentPillClass[item.sentiment]} px-2 py-0.5 rounded-full`}>{item.sentiment}</span>
-                      <span className={`${isDark ? 'text-slate-400' : 'text-gray-500'}`}>•</span>
+                      <span className={`${isDark ? 'text-slate-400' : 'text-gray-500'}`}>.</span>
                       <span className={mutedText}>{formatRelativeTime(item.publishedAt)}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
@@ -614,6 +826,43 @@ export function ArticlePage() {
                 icon={<MapPin size={14} className="text-cyan-500" />}
                 isDark={isDark}
               />
+              <EntityBlock
+                title="Misc"
+                values={article.entities.misc}
+                icon={<Gauge size={14} className="text-cyan-500" />}
+                isDark={isDark}
+              />
+            </div>
+          </div>
+
+          <div className={`rounded-2xl border p-5 ${panelBase}`}>
+            <h3 className={`text-sm font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-slate-200' : 'text-gray-800'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+              <Link2 size={14} className="text-cyan-500" />
+              Related Coverage
+            </h3>
+
+            <div className="space-y-2.5">
+              {article.relatedUrls.length === 0 ? (
+                <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>No related links extracted.</p>
+              ) : (
+                article.relatedUrls.slice(0, 6).map((url) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`block rounded-xl p-2.5 transition-colors ${isDark ? 'hover:bg-slate-700/60' : 'hover:bg-gray-50'}`}
+                  >
+                    <p className={`text-sm font-medium line-clamp-2 ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
+                      {url}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-[11px]">
+                      <span className={mutedText}>{formatHost(url)}</span>
+                      <ExternalLink size={12} className={mutedText} />
+                    </div>
+                  </a>
+                ))
+              )}
             </div>
           </div>
         </motion.aside>

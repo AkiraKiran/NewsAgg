@@ -4,10 +4,11 @@ import { motion } from 'motion/react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useApp } from '../contexts/AppContext';
 import { Activity, Clock3, TrendingUp, Users } from 'lucide-react';
-import { CATEGORIES, CATEGORY_LABELS } from '../constants';
+import { CATEGORY_BADGE_CLASS, CATEGORIES, CATEGORY_LABELS } from '../constants';
 import {
   getArticleId,
   getAllArticles,
+  getDatasetSnapshot,
   getLiveEngagement,
   getSentimentDistribution,
   getTrendingKeywords,
@@ -22,12 +23,6 @@ const SENTIMENT_COLORS = {
 };
 
 const SENTIMENT_ROTATE_MS = 7000;
-
-const CATEGORY_BADGE_CLASS: Record<(typeof CATEGORIES)[number], string> = {
-  politics: 'bg-sky-600 text-white',
-  sport: 'bg-orange-500 text-white',
-  business: 'bg-indigo-600 text-white',
-};
 
 const CustomTooltip = ({ active, payload, isDark, total }: any) => {
   if (active && payload && payload.length) {
@@ -79,6 +74,19 @@ const formatCount = (value: number): string => {
   return String(value);
 };
 
+const formatSnapshotDate = (value: string | null): string => {
+  if (!value) {
+    return 'Unavailable';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString();
+};
+
 const sentimentTextClass: Record<SentimentType, string> = {
   positive: 'text-emerald-500',
   neutral: 'text-gray-500',
@@ -95,6 +103,7 @@ export function SentimentPanel() {
   const { t, isDark, selectedCategory } = useApp();
   const [tick, setTick] = useState(Date.now());
   const [sentimentCategoryIndex, setSentimentCategoryIndex] = useState(0);
+  const datasetSnapshot = useMemo(() => getDatasetSnapshot(), []);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -168,6 +177,8 @@ export function SentimentPanel() {
   const sentimentCategoryLabel = CATEGORY_LABELS[rotatingSentimentCategory];
   const sentimentCategoryBadgeClass = CATEGORY_BADGE_CLASS[rotatingSentimentCategory];
   const activeDataCategoryLabel = selectedCategory === 'all' ? t.allCategories : CATEGORY_LABELS[selectedCategory];
+  const lastScrapedLabel = formatSnapshotDate(datasetSnapshot.scrapedAt);
+  const modelCount = Object.keys(datasetSnapshot.aiModels).length;
 
   const panelBase = isDark
     ? 'bg-slate-800/80 border-slate-700/50 backdrop-blur-md'
@@ -489,9 +500,20 @@ export function SentimentPanel() {
             <p className="text-xs" style={{ color: mutedColor }}>Keywords tracked</p>
             <p className="text-lg font-bold text-violet-500">{allKeywords.length}</p>
           </div>
+          <div className={`rounded-xl p-2.5 ${isDark ? 'bg-slate-700/50' : 'bg-gray-50/90'}`}>
+            <p className="text-xs" style={{ color: mutedColor }}>Sources</p>
+            <p className="text-lg font-bold text-emerald-500">{datasetSnapshot.sourceCount}</p>
+          </div>
+          <div className={`rounded-xl p-2.5 ${isDark ? 'bg-slate-700/50' : 'bg-gray-50/90'}`}>
+            <p className="text-xs" style={{ color: mutedColor }}>AI models</p>
+            <p className="text-lg font-bold text-amber-500">{modelCount}</p>
+          </div>
         </div>
         <p className="text-[11px] mt-2" style={{ color: mutedColor }}>
           Snapshot from latest scraper run ({activeDataCategoryLabel})
+        </p>
+        <p className="text-[11px] mt-1" style={{ color: mutedColor }}>
+          Last scraped: {lastScrapedLabel}
         </p>
       </div>
     </div>
