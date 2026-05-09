@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../contexts/AppContext';
 import { newsAPI, NewsArticle } from '../services/newsAPI';
 import { NewsCard } from './NewsCard';
+import { HeroCarousel } from './HeroCarousel';
 
 const PER_PAGE = 9;
 
@@ -78,13 +79,8 @@ export function NewsGrid() {
   const canLoadMore = !showPagination && visibleCount < articles.length;
 
   const handleLoadMore = () => {
-    const next = visibleCount + PER_PAGE;
-    if (next >= articles.length) {
-      setShowPagination(true);
-      setPage(1);
-    } else {
-      setVisibleCount(next);
-    }
+    // Load all remaining articles at once
+    setVisibleCount(articles.length);
   };
 
   const handlePageChange = (p: number) => {
@@ -122,10 +118,15 @@ export function NewsGrid() {
   }
 
   return (
-    <div>
+    <div className="w-full">
+      {/* Hero Carousel */}
+      <div className="mb-8 -mx-6 px-6">
+        <HeroCarousel />
+      </div>
+
       {/* Grid */}
       <AnimatePresence mode="wait">
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {currentArticles.map((article, i) => (
             <NewsCard key={`${article.url}-${page}`} article={article} index={i} />
           ))}
@@ -134,14 +135,18 @@ export function NewsGrid() {
 
       {/* Load More */}
       {canLoadMore && (
-        <div className="flex justify-center mt-8">
-          <button
+        <div className="flex justify-center mt-12 mb-8">
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={handleLoadMore}
-            className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg hover:shadow-cyan-500/25 hover:-translate-y-0.5 active:translate-y-0"
+            className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg hover:shadow-cyan-500/40"
             style={{ fontFamily: 'Poppins, sans-serif' }}
           >
             {t.loadMore}
-          </button>
+          </motion.button>
         </div>
       )}
 
@@ -150,37 +155,43 @@ export function NewsGrid() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-center gap-2 mt-8 flex-wrap"
+          className={`flex items-center justify-center gap-3 mt-12 mb-8 p-4 rounded-2xl ${isDark ? 'bg-slate-800/30' : 'bg-gradient-to-r from-slate-50 to-gray-50'}`}
         >
-          <button
+          <motion.button
             onClick={() => handlePageChange(page - 1)}
             disabled={page === 1}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${page === 1 ? 'opacity-40 cursor-not-allowed' : 'hover:-translate-x-0.5'} ${isDark ? 'bg-slate-700 text-slate-200' : 'bg-white text-gray-700 border border-gray-200 shadow-sm'}`}
+            whileHover={page !== 1 ? { scale: 1.05 } : {}}
+            whileTap={page !== 1 ? { scale: 0.95 } : {}}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${page === 1 ? 'opacity-40 cursor-not-allowed' : ''} ${isDark ? 'bg-slate-700/50 text-slate-200 hover:bg-slate-700' : 'bg-white text-gray-700 border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300'}`}
           >
-            <ChevronLeft size={15} />
-            {t.previous}
-          </button>
+            <ChevronLeft size={16} />
+            <span className="hidden sm:inline">{t.previous}</span>
+          </motion.button>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5 px-2">
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-              <button
+              <motion.button
                 key={p}
                 onClick={() => handlePageChange(p)}
-                className={`w-9 h-9 rounded-xl text-sm font-semibold transition-all ${p === page ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' : isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                whileHover={p !== page ? { scale: 1.1 } : {}}
+                whileTap={{ scale: 0.95 }}
+                className={`min-w-9 h-9 rounded-lg text-sm font-semibold transition-all ${p === page ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' : isDark ? 'text-slate-300 hover:bg-slate-700/50' : 'text-gray-600 hover:bg-white border border-gray-200'}`}
               >
                 {p}
-              </button>
+              </motion.button>
             ))}
           </div>
 
-          <button
+          <motion.button
             onClick={() => handlePageChange(page + 1)}
             disabled={page === totalPages}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${page === totalPages ? 'opacity-40 cursor-not-allowed' : 'hover:translate-x-0.5'} ${isDark ? 'bg-slate-700 text-slate-200' : 'bg-white text-gray-700 border border-gray-200 shadow-sm'}`}
+            whileHover={page !== totalPages ? { scale: 1.05 } : {}}
+            whileTap={page !== totalPages ? { scale: 0.95 } : {}}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${page === totalPages ? 'opacity-40 cursor-not-allowed' : ''} ${isDark ? 'bg-slate-700/50 text-slate-200 hover:bg-slate-700' : 'bg-white text-gray-700 border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300'}`}
           >
-            {t.next}
-            <ChevronRight size={15} />
-          </button>
+            <span className="hidden sm:inline">{t.next}</span>
+            <ChevronRight size={16} />
+          </motion.button>
         </motion.div>
       )}
     </div>
