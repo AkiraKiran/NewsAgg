@@ -22,7 +22,7 @@ const SENTIMENT_COLORS = {
   negative: '#ef4444',
 };
 
-const SENTIMENT_ROTATE_MS = 7000;
+const SENTIMENT_ROTATE_MS = 10000;
 
 const CustomTooltip = ({ active, payload, isDark, total }: any) => {
   if (active && payload && payload.length) {
@@ -208,7 +208,7 @@ export function SentimentPanel() {
               </span>
             </div>
 
-            <div className="h-[130px] w-full">
+            <div className="h-[130px] w-full flex min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -281,7 +281,7 @@ export function SentimentPanel() {
               )}
             </div>
 
-            <div className="h-[130px] w-full">
+            <div className="h-[130px] w-full flex min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -335,7 +335,7 @@ export function SentimentPanel() {
 
             {selectedCategory === 'all' && (
               <div className="mt-2">
-                <div className={`h-1 rounded-full overflow-hidden ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`}>
+                <div className={`h-1 rounded-full overflow-hidden ${isDark ? 'bg-slate-1000' : 'bg-gray-100'}`}>
                   <motion.div
                     key={sentimentCategoryLabel}
                     initial={{ width: '0%' }}

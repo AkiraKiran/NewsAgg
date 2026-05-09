@@ -137,21 +137,21 @@ export function NewsCard({ article, index }: NewsCardProps) {
               ))}
             </div>
 
-            <div className={`flex items-center justify-between gap-3 pt-3 border-t text-xs ${isDark ? 'border-slate-700 text-slate-400' : 'border-gray-100 text-gray-500'}`}>
+            <div className={`flex items-center justify-between gap-3 pt-3 border-t text-xs ${isDark ? 'border-slate-700 text-slate-400' : 'border-gray-200 text-gray-500'}`}>
               <div className="flex items-center gap-1.5 min-w-0">
-                <Clock3 size={13} className="flex-shrink-0" />
-                <span className="truncate">
-                  {article.readability.readingTimeMin > 0 ? `${article.readability.readingTimeMin} min read` : 'Quick read'}
+                <Clock3 size={13} className="flex-shrink-0 opacity-70" />
+                <span className="truncate font-medium">
+                  {article.readability.readingTimeMin > 0 ? `${article.readability.readingTimeMin} min` : 'Quick read'}
                 </span>
               </div>
 
-              <span className="flex-shrink-0">{formatDate(article.publishedAt)}</span>
+              <span className="flex-shrink-0 font-medium">{formatDate(article.publishedAt)}</span>
             </div>
 
-            <div className={`flex items-center justify-between gap-3 mt-2 text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-              <span className="truncate">{article.source.domain || t.source}</span>
+            <div className={`flex items-center justify-between gap-3 mt-2.5 text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+              <span className="truncate opacity-80">{article.source.domain || t.source}</span>
               {typeof article.aiRelevance === 'number' && (
-                <span className={`${isDark ? 'text-cyan-300' : 'text-cyan-700'} font-semibold`}>
+                <span className={`font-semibold px-2 py-0.5 rounded ${isDark ? 'text-cyan-300 bg-cyan-500/10' : 'text-cyan-700 bg-cyan-50'}`}>
                   AI {(article.aiRelevance * 100).toFixed(0)}%
                 </span>
               )}
