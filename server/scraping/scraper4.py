@@ -1243,4 +1243,5 @@ def pg_insert_all(dsn: str, articles: list[dict]):
 
 
 # ── Uncomment to use: ──────────────────────────────────────────────
-# pg_insert_all("postgresql://user:pass@localhost/newsdb", final_data)
+NEON_DSN = "postgresql://user:password@host:port/dbname"
+pg_insert_all(NEON_DSN, final_data)
