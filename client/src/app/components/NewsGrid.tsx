@@ -118,15 +118,15 @@ export function NewsGrid() {
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full overflow-x-hidden">
       {/* Hero Carousel */}
-      <div className="mb-8 -mx-6 px-6">
+      <div className="mb-8 overflow-hidden">
         <HeroCarousel />
       </div>
 
       {/* Grid */}
       <AnimatePresence mode="wait">
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 overflow-x-hidden">
           {currentArticles.map((article, i) => (
             <NewsCard key={`${article.url}-${page}`} article={article} index={i} />
           ))}

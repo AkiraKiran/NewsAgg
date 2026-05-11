@@ -31,11 +31,11 @@ export function Home() {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       {/* Main content - two column layout with independent scrolling */}
-      <div className="flex gap-6 px-4 md:px-6 pt-6 md:pt-8 flex-1 min-h-0 max-w-[1600px] mx-auto w-full">
+      <div className="flex gap-6 px-4 md:px-6 pt-6 md:pt-8 flex-1 min-h-0 max-w-[1600px] mx-auto w-full overflow-x-hidden">
         {/* News Grid - independent scrolling */}
         <div
           ref={newsColumnRef}
-          className="flex-1 min-w-0 overflow-y-auto relative"
+          className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden relative"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>

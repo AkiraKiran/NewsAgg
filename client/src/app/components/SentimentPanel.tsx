@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
@@ -12,8 +12,13 @@ import {
   getLiveEngagement,
   getSentimentDistribution,
   getTrendingKeywords,
+  NewsArticle,
   NewsCategoryFilter,
+  SentimentDistributionItem,
   SentimentType,
+  TrendingKeyword,
+  LiveEngagementItem,
+  DatasetSnapshot,
 } from '../services/newsAPI';
 
 const SENTIMENT_COLORS = {
@@ -23,6 +28,16 @@ const SENTIMENT_COLORS = {
 };
 
 const SENTIMENT_ROTATE_MS = 10000;
+
+const EMPTY_SNAPSHOT: DatasetSnapshot = {
+  status: 'ok',
+  totalResults: 0,
+  articleCount: 0,
+  scrapedAt: null,
+  categories: [],
+  aiModels: {},
+  sourceCount: 0,
+};
 
 const CustomTooltip = ({ active, payload, isDark, total }: any) => {
   if (active && payload && payload.length) {
@@ -41,50 +56,28 @@ const CustomTooltip = ({ active, payload, isDark, total }: any) => {
 
 const formatRelativeTime = (value: string): string => {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(date.getTime())) return value;
 
-  const now = Date.now();
-  const diffMinutes = Math.round((now - date.getTime()) / (1000 * 60));
-
-  if (diffMinutes <= 1) {
-    return 'just now';
-  }
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
-  }
+  const diffMinutes = Math.round((Date.now() - date.getTime()) / (1000 * 60));
+  if (diffMinutes <= 1) return 'just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
 
   const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  }
+  if (diffHours < 24) return `${diffHours}h ago`;
 
-  const diffDays = Math.round(diffHours / 24);
-  return `${diffDays}d ago`;
+  return `${Math.round(diffHours / 24)}d ago`;
 };
 
 const formatCount = (value: number): string => {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  }
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return String(value);
 };
 
 const formatSnapshotDate = (value: string | null): string => {
-  if (!value) {
-    return 'Unavailable';
-  }
-
+  if (!value) return 'Unavailable';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 };
 
 const sentimentTextClass: Record<SentimentType, string> = {
@@ -103,57 +96,70 @@ export function SentimentPanel() {
   const { t, isDark, selectedCategory } = useApp();
   const [tick, setTick] = useState(Date.now());
   const [sentimentCategoryIndex, setSentimentCategoryIndex] = useState(0);
-  const datasetSnapshot = useMemo(() => getDatasetSnapshot(), []);
 
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setTick(Date.now());
-    }, 12_000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  useEffect(() => {
-    if (selectedCategory === 'all') {
-      return;
-    }
-
-    const categoryIndex = CATEGORIES.indexOf(selectedCategory);
-    if (categoryIndex >= 0) {
-      setSentimentCategoryIndex(categoryIndex);
-    }
-  }, [selectedCategory]);
-
-  useEffect(() => {
-    if (selectedCategory !== 'all') {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setSentimentCategoryIndex((prev) => (prev + 1) % CATEGORIES.length);
-    }, SENTIMENT_ROTATE_MS);
-
-    return () => window.clearInterval(intervalId);
-  }, [selectedCategory]);
+  // ── Async data state ──────────────────────────────────────────────────────
+  const [datasetSnapshot, setDatasetSnapshot] = useState<DatasetSnapshot>(EMPTY_SNAPSHOT);
+  const [allArticles, setAllArticles] = useState<NewsArticle[]>([]);
+  const [overallSentimentDistribution, setOverallSentimentDistribution] = useState<SentimentDistributionItem[]>([]);
+  const [categorySentimentDistribution, setCategorySentimentDistribution] = useState<SentimentDistributionItem[]>([]);
+  const [trendingKeywords, setTrendingKeywords] = useState<TrendingKeyword[]>([]);
+  const [allKeywords, setAllKeywords] = useState<TrendingKeyword[]>([]);
+  const [liveEngagement, setLiveEngagement] = useState<LiveEngagementItem[]>([]);
 
   const analyticsCategory: NewsCategoryFilter = selectedCategory;
   const rotatingSentimentCategory = selectedCategory === 'all'
     ? CATEGORIES[sentimentCategoryIndex]
     : selectedCategory;
 
+  // ── Fetch: dataset snapshot (once) ───────────────────────────────────────
+  useEffect(() => {
+    getDatasetSnapshot().then(setDatasetSnapshot);
+  }, []);
+
+  // ── Fetch: articles + keywords (when category changes) ───────────────────
+  useEffect(() => {
+    getAllArticles(analyticsCategory).then(setAllArticles);
+    getTrendingKeywords(10, analyticsCategory).then(setTrendingKeywords);
+    getTrendingKeywords(10000, analyticsCategory).then(setAllKeywords);
+  }, [analyticsCategory]);
+
+  // ── Fetch: overall sentiment (once) ──────────────────────────────────────
+  useEffect(() => {
+    getSentimentDistribution('all').then(setOverallSentimentDistribution);
+  }, []);
+
+  // ── Fetch: per-category sentiment (when rotating category changes) ────────
+  useEffect(() => {
+    getSentimentDistribution(rotatingSentimentCategory).then(setCategorySentimentDistribution);
+  }, [rotatingSentimentCategory]);
+
+  // ── Fetch: live engagement (on tick or category change) ───────────────────
+  useEffect(() => {
+    getLiveEngagement(tick, 6, analyticsCategory).then(setLiveEngagement);
+  }, [tick, analyticsCategory]);
+
+  // ── Timers ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const id = window.setInterval(() => setTick(Date.now()), 12_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (selectedCategory === 'all') {
+      const id = window.setInterval(
+        () => setSentimentCategoryIndex((prev) => (prev + 1) % CATEGORIES.length),
+        SENTIMENT_ROTATE_MS
+      );
+      return () => window.clearInterval(id);
+    }
+    const categoryIndex = CATEGORIES.indexOf(selectedCategory);
+    if (categoryIndex >= 0) setSentimentCategoryIndex(categoryIndex);
+  }, [selectedCategory]);
+
+  // ── Derived values ────────────────────────────────────────────────────────
   const handleNextSentimentCategory = () => {
     setSentimentCategoryIndex((prev) => (prev + 1) % CATEGORIES.length);
   };
-
-  const allArticles = useMemo(() => getAllArticles(analyticsCategory), [analyticsCategory]);
-  const overallSentimentDistribution = useMemo(() => getSentimentDistribution('all'), []);
-  const categorySentimentDistribution = useMemo(
-    () => getSentimentDistribution(rotatingSentimentCategory),
-    [rotatingSentimentCategory]
-  );
-  const trendingKeywords = useMemo(() => getTrendingKeywords(10, analyticsCategory), [analyticsCategory]);
-  const allKeywords = useMemo(() => getTrendingKeywords(10000, analyticsCategory), [analyticsCategory]);
-  const liveEngagement = useMemo(() => getLiveEngagement(tick, 6, analyticsCategory), [tick, analyticsCategory]);
 
   const overallSentimentData = overallSentimentDistribution.map((item) => ({
     name: t[item.type],
@@ -211,15 +217,7 @@ export function SentimentPanel() {
             <div className="h-[130px] w-full flex min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={overallSentimentData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={28}
-                    outerRadius={52}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
+                  <Pie data={overallSentimentData} cx="50%" cy="50%" innerRadius={28} outerRadius={52} paddingAngle={2} dataKey="value">
                     {overallSentimentData.map((entry, i) => (
                       <Cell key={`overall-${entry.type}-${i}`} fill={entry.color} strokeWidth={0} />
                     ))}
@@ -242,13 +240,7 @@ export function SentimentPanel() {
                       </span>
                     </div>
                     <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`}>
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${percentage}%`,
-                          background: item.color,
-                        }}
-                      />
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${percentage}%`, background: item.color }} />
                     </div>
                   </div>
                 );
@@ -284,15 +276,7 @@ export function SentimentPanel() {
             <div className="h-[130px] w-full flex min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={categorySentimentData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={28}
-                    outerRadius={52}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
+                  <Pie data={categorySentimentData} cx="50%" cy="50%" innerRadius={28} outerRadius={52} paddingAngle={2} dataKey="value">
                     {categorySentimentData.map((entry, i) => (
                       <Cell key={`category-${entry.type}-${i}`} fill={entry.color} strokeWidth={0} />
                     ))}
@@ -315,13 +299,7 @@ export function SentimentPanel() {
                       </span>
                     </div>
                     <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`}>
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${percentage}%`,
-                          background: item.color,
-                        }}
-                      />
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${percentage}%`, background: item.color }} />
                     </div>
                   </div>
                 );
@@ -425,10 +403,7 @@ export function SentimentPanel() {
                   <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`}>
                     <div
                       className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${(topic.count / maxKeywordCount) * 100}%`,
-                        background: '#06b6d4',
-                      }}
+                      style={{ width: `${(topic.count / maxKeywordCount) * 100}%`, background: '#06b6d4' }}
                     />
                   </div>
                 </div>
@@ -490,6 +465,7 @@ export function SentimentPanel() {
         </div>
       </div>
 
+      {/* Stats */}
       <div className={`rounded-2xl border shadow-lg p-4 ${panelBase}`}>
         <div className="grid grid-cols-2 gap-3">
           <div className={`rounded-xl p-2.5 ${isDark ? 'bg-slate-700/50' : 'bg-gray-50/90'}`}>
