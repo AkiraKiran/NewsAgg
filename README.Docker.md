@@ -1,17 +1,47 @@
-### Building and running your application
+# NewsAgg Docker Guide
 
-When you're ready, start your application by running:
-`docker compose up --build`.
+## Services
 
-### Deploying your application to the cloud
+`docker-compose.yml` sekarang menjalankan:
 
-First, build your image, e.g.: `docker build -t myapp .`.
-If your cloud uses a different CPU architecture than your development
-machine (e.g., you are on a Mac M1 and your cloud provider is amd64),
-you'll want to build the image for that platform, e.g.:
-`docker build --platform=linux/amd64 -t myapp .`.
+1. `server` (Express + PostgreSQL/Neon) di port `3000`
+2. `client` (Nginx static frontend) di port `8080`
 
-Then, push it to your registry, e.g. `docker push myregistry.com/myapp`.
+## Required environment
 
-Consult Docker's [getting started](https://docs.docker.com/go/get-started-sharing/)
-docs for more detail on building and pushing.
+### `server/.env`
+
+Minimal isi:
+
+```env
+API_KEY=your_newsapi_key
+DATABASE_URL=your_neon_postgres_url
+NEON_DSN=your_neon_postgres_url
+```
+
+### `server/.hf.env`
+
+Dipakai scraper Python:
+
+```env
+HF_TOKEN=your_huggingface_token
+```
+
+## Run
+
+Dari root repository:
+
+```bash
+docker compose up --build
+```
+
+Lalu buka:
+
+- Frontend: `http://localhost:8080`
+- Server API: `http://localhost:3000`
+
+## Notes
+
+- Tidak ada lagi dependency MongoDB pada stack ini.
+- Root `Dockerfile` build backend image dari root context.
+- `server/Dockerfile` expose port `3000` sesuai `server.js`.

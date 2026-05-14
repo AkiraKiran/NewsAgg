@@ -13,12 +13,12 @@ WORKDIR /app
 
 # Copy deps dan install
 COPY package*.json ./
-RUN npm install
+RUN npm ci --omit=dev
 
 # Copy all source
 COPY . .
 
-EXPOSE 5000
+EXPOSE 3000
 
 # Jalankan server
 CMD ["npm", "start"]

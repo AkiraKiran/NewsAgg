@@ -1,0 +1,13 @@
+python-dotenv
+requests
+beautifulsoup4
+newspaper3k
+lxml_html_clean
+transformers
+torch
+nltk
+langdetect
+textstat
+pandas
+psycopg2-binary
+sentencepiece

@@ -178,6 +178,52 @@ const TOPIC_MAP: Record<NewsCategoryFilter, NewsTopic | null> = {
 
 const SENTIMENT_TYPES: SentimentType[] = ['positive', 'neutral', 'negative'];
 const TOPIC_VALUES = Object.keys(TOPIC_TO_CATEGORY) as NewsTopic[];
+const KEYWORD_STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'that',
+  'this',
+  'from',
+  'have',
+  'has',
+  'was',
+  'were',
+  'will',
+  'would',
+  'about',
+  'into',
+  'after',
+  'before',
+  'over',
+  'under',
+  'more',
+  'most',
+  'just',
+  'than',
+  'also',
+  'news',
+  'read',
+  'watch',
+  'video',
+  'update',
+  'latest',
+]);
+const KEYWORD_NOISE_WORDS = new Set([
+  'cnn',
+  'bbc',
+  'aljazeera',
+  'breaking',
+  'live',
+  'story',
+  'report',
+  'privacy',
+  'cookie',
+  'terms',
+  'source',
+  'article',
+]);
 
 // ─── Primitive helpers (unchanged) ───────────────────────────────────────────
 
@@ -256,6 +302,17 @@ const normalizeTopic = (topic: unknown): NewsTopic | null => {
   const rawTopic = asString(topic);
   if (!rawTopic) return null;
   return TOPIC_VALUES.find((value) => value.toLowerCase() === rawTopic.toLowerCase()) ?? null;
+};
+
+const normalizeKeywordToken = (value: string): string | null => {
+  const trimmed = value.trim().toLowerCase().replace(/^#/, '');
+  if (!trimmed) return null;
+  if (trimmed.includes('http://') || trimmed.includes('https://')) return null;
+  const cleaned = trimmed.replace(/[^a-z0-9\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleaned || cleaned.length < 4) return null;
+  if (/^\d+$/.test(cleaned)) return null;
+  if (KEYWORD_STOP_WORDS.has(cleaned) || KEYWORD_NOISE_WORDS.has(cleaned)) return null;
+  return cleaned;
 };
 
 const normalizeSentiment = (value: unknown): NewsSentiment => {
@@ -362,7 +419,7 @@ const normalizeOpenGraph = (value: unknown): NewsOpenGraph => {
 
 const normalizeArticle = (article: unknown): NewsArticle | null => {
   const raw = asRecord(article);
-  
+
   // 1. 处理 Topic
   const topic = normalizeTopic(raw.topic);
   if (!topic) return null;
@@ -425,31 +482,31 @@ const normalizeArticle = (article: unknown): NewsArticle | null => {
     urlToImage: pickString(raw.url_to_image, raw.urlToImage),
     images: normalizeImages(raw.images),
     videoUrl: pickString(raw.video_url, raw.videoUrl),
-    
+
     // 使用刚才拼接的 Input
     sentiment: normalizeSentiment(sentimentInput),
     toxicity: normalizeToxicity(toxicityInput),
     readability: normalizeReadability(readabilityInput),
-    
+
     topic,
     section: pickString(raw.section),
     metaTags: asStringArray(raw.meta_tags ?? raw.metaTags ?? []),
     ogType: pickString(raw.og_type, raw.ogType),
     language: pickString(raw.language, source.language),
-    
+
     // 确保数组不为 null
-    keywords: asStringArray(raw.keywords ?? []), 
+    keywords: asStringArray(raw.keywords ?? []),
     entities: normalizeEntities(raw.entities || {}),
     relatedUrls: asStringArray(raw.related_urls ?? raw.relatedUrls ?? []),
-    
+
     aiRelevance: raw.ai_relevance ? Number(raw.ai_relevance) : (pickNumber(raw.aiRelevance) ?? undefined),
     aiTopLabel: pickString(raw.ai_top_label, raw.aiTopLabel),
     aiLabelScores: asNumberRecord(raw.ai_label_scores ?? raw.aiLabelScores ?? {}),
-    
+
     isPremium: pickBoolean(raw.is_premium, raw.isPremium),
     isAccessibleFree: pickBoolean(raw.is_accessible_free, raw.isAccessibleFree),
     jsonldWordCount: pickNumber(raw.jsonld_word_count, raw.jsonldWordCount),
-    
+
     // 处理 OG (DB 回传可能是 og_data)
     og: normalizeOpenGraph(raw.og || raw.og_data),
   };
@@ -481,8 +538,6 @@ interface NormalizedStore {
 let storePromise: Promise<NormalizedStore> | null = null;
 
 const buildStore = (raw: RawNewsData): NormalizedStore => {
-  const rawAiModels = asRecord(raw.aiModels);
-
   const articles = (raw.articles ?? [])
     .map(normalizeArticle)
     .filter((article): article is NewsArticle => article !== null)
@@ -496,15 +551,38 @@ const buildStore = (raw: RawNewsData): NormalizedStore => {
     .map(normalizeTopic)
     .filter((topic): topic is NewsTopic => topic !== null);
 
+  const modelEntries = Object.entries(asRecord(raw.aiModels))
+    .map(([key, value]) => [key, pickString(value) ?? String(value)])
+    .filter((entry): entry is [string, string] => Boolean(entry[0] && entry[1]));
+  const aiModels: Record<string, string> = Object.fromEntries(modelEntries);
+  if (Object.keys(aiModels).length === 0) {
+    const detectedModels = Array.from(
+      new Set(
+        articles
+          .map((article) => pickString(article.sentiment.model))
+          .filter((item): item is string => item !== null)
+      )
+    ).sort();
+    detectedModels.forEach((modelName, index) => {
+      aiModels[`sentiment_${index + 1}`] = modelName;
+    });
+  }
+
+  const scrapedAtCandidates = articles
+    .map((article) => pickString(article.scrapedAt, article.publishedAt))
+    .filter((value): value is string => value !== null)
+    .map((value) => ({ raw: value, ts: new Date(value).getTime() }))
+    .filter((entry) => !Number.isNaN(entry.ts))
+    .sort((left, right) => right.ts - left.ts);
+  const status = pickString(raw.status) ?? 'ok';
+
   const snapshot: DatasetSnapshot = {
-    status: raw.status ?? 'ok',
+    status,
     totalResults: typeof raw.totalResults === 'number' ? raw.totalResults : articles.length,
     articleCount: articles.length,
-    scrapedAt: pickString(raw.scrapedAt),
+    scrapedAt: pickString(raw.scrapedAt) ?? scrapedAtCandidates[0]?.raw ?? null,
     categories: datasetCategories.length > 0 ? datasetCategories : [...SUPPORTED_TOPICS],
-    aiModels: Object.fromEntries(
-      Object.entries(rawAiModels).map(([key, value]) => [key, pickString(value) ?? String(value)])
-    ),
+    aiModels,
     sourceCount: new Set(articles.map((a) => a.source.id ?? a.source.name)).size,
   };
 
@@ -637,12 +715,25 @@ export const getTrendingKeywords = async (
 ): Promise<TrendingKeyword[]> => {
   const { articles } = await getStore();
   const keywordMap = new Map<string, number>();
+
   filterByCategory(articles, category).forEach((article) => {
-    [...article.keywords, ...article.metaTags].forEach((kw) => {
-      const normalized = kw.toLowerCase();
+    const seenInArticle = new Set<string>();
+
+    article.keywords.forEach((keyword) => {
+      const normalized = normalizeKeywordToken(keyword);
+      if (!normalized || seenInArticle.has(normalized)) return;
+      seenInArticle.add(normalized);
+      keywordMap.set(normalized, (keywordMap.get(normalized) ?? 0) + 3);
+    });
+
+    article.metaTags.forEach((tag) => {
+      const normalized = normalizeKeywordToken(tag);
+      if (!normalized || seenInArticle.has(normalized)) return;
+      seenInArticle.add(normalized);
       keywordMap.set(normalized, (keywordMap.get(normalized) ?? 0) + 1);
     });
   });
+
   return [...keywordMap.entries()]
     .sort((left, right) =>
       right[1] === left[1] ? left[0].localeCompare(right[0]) : right[1] - left[1]

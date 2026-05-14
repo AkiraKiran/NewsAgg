@@ -1,62 +1,65 @@
 require('dotenv').config();
 
-// PostgreSQL 连线配置
 const { Pool } = require('pg');
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
 const express = require('express');
 const cors = require('cors');
-const app = express();
 const axios = require('axios');
-const mongoose = require('mongoose');
 
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+});
+
+const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const API_KEY = process.env.API_KEY;
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/newsagg')
-    .then(() => console.log('MongoDB connected successfully'))
-    .catch(err => console.log('MongoDB connection error:', err));
+async function ensureInteractionTables() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS comments (
+            id BIGSERIAL PRIMARY KEY,
+            article_url TEXT NOT NULL,
+            article_title TEXT,
+            author TEXT NOT NULL,
+            text TEXT NOT NULL,
+            likes INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
 
-// Comment Schema
-const commentSchema = new mongoose.Schema({
-    articleUrl: String,
-    articleTitle: String,
-    author: String,
-    text: String,
-    likes: { type: Number, default: 0 },
-    createdAt: { type: Date, default: Date.now }
-});
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_comments_article_url
+        ON comments (article_url);
+    `);
 
-const Comment = mongoose.model('Comment', commentSchema);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS article_views (
+            id BIGSERIAL PRIMARY KEY,
+            article_url TEXT NOT NULL,
+            article_title TEXT,
+            user_agent TEXT,
+            viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
 
-// View Schema
-const viewSchema = new mongoose.Schema({
-    articleUrl: String,
-    articleTitle: String,
-    viewedAt: { type: Date, default: Date.now },
-    userAgent: String
-});
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_article_views_article_url
+        ON article_views (article_url);
+    `);
+}
 
-const View = mongoose.model('View', viewSchema);
-
-// Function to fetch news from the API
 function fetchNews(url, res) {
     axios.get(url)
-        .then(response => {
+        .then((response) => {
             if (response.data.totalResults > 0) {
                 res.json({
                     status: 200,
                     success: true,
                     message: 'News fetched successfully',
-                    data: response.data
+                    data: response.data,
                 });
             } else {
                 res.json({
@@ -66,24 +69,23 @@ function fetchNews(url, res) {
                 });
             }
         })
-        .catch(error => {
+        .catch((error) => {
             res.json({
                 status: 500,
                 success: false,
                 message: 'Error fetching news from the API',
-                error: error.message
+                error: error.message,
             });
         });
 }
 
-// --- 从 PostgreSQL 云端资料库读取新闻 ---
+// PostgreSQL cloud dataset endpoint
 app.get('/api/news-from-db', async (req, res) => {
     try {
-        const category = req.query.category; 
-        
-        // 加入 JOIN，把来源 (sources) 和作者 (authors) 的详细资料一并抓出来
+        const category = req.query.category;
+
         let queryText = `
-            SELECT 
+            SELECT
                 a.*,
                 s.name        AS source_name,
                 s.domain      AS source_domain,
@@ -96,7 +98,7 @@ app.get('/api/news-from-db', async (req, res) => {
             LEFT JOIN sources s  ON a.source_id = s.id
             LEFT JOIN authors au ON a.author_id = au.id
         `;
-        let queryParams =[];
+        const queryParams = [];
 
         if (category && category !== 'all') {
             queryText += ' WHERE LOWER(a.topic) = LOWER($1)';
@@ -106,12 +108,38 @@ app.get('/api/news-from-db', async (req, res) => {
         queryText += ' ORDER BY a.published_at DESC LIMIT 400';
 
         const result = await pool.query(queryText, queryParams);
-        
+
+        const categories = [...new Set(
+            result.rows
+                .map((row) => row.topic)
+                .filter((value) => typeof value === 'string' && value.trim().length > 0)
+        )];
+
+        const modelValues = [...new Set(
+            result.rows
+                .map((row) => row.sentiment_model)
+                .filter((value) => typeof value === 'string' && value.trim().length > 0)
+        )];
+        const aiModels = Object.fromEntries(
+            modelValues.map((model, index) => [`sentiment_${index + 1}`, model])
+        );
+
+        const scrapedTimestamps = result.rows
+            .map((row) => new Date(row.scraped_at).getTime())
+            .filter((value) => Number.isFinite(value));
+        const latestScrapedAt = scrapedTimestamps.length > 0
+            ? new Date(Math.max(...scrapedTimestamps)).toISOString()
+            : null;
+
         res.json({
             status: 200,
             success: true,
+            datasetStatus: 'ok',
             totalResults: result.rows.length,
-            articles: result.rows 
+            articles: result.rows,
+            scrapedAt: latestScrapedAt,
+            categories,
+            aiModels,
         });
     } catch (err) {
         console.error('Database Error:', err);
@@ -119,42 +147,37 @@ app.get('/api/news-from-db', async (req, res) => {
     }
 });
 
-// Fetch news
 app.get('/everything', (req, res) => {
-    let pageSize = parseInt(req.query.pageSize) || 40;
-    let page = parseInt(req.query.page) || 1;
-    let url = `https://newsapi.org/v2/everything?q=page=${page}&pageSize=${pageSize}&apiKey=${process.env.API_KEY}`;
+    const pageSize = parseInt(req.query.pageSize, 10) || 40;
+    const page = parseInt(req.query.page, 10) || 1;
+    const url = `https://newsapi.org/v2/everything?q=page=${page}&pageSize=${pageSize}&apiKey=${API_KEY}`;
     fetchNews(url, res);
 });
 
-// Top Headlines
 app.options('/top-headlines', cors());
 app.get('/top-headlines', async (req, res) => {
     try {
         const category = req.query.category || 'general';
-        
-        // 从 PostgreSQL 拿资料
+
         let queryText = 'SELECT * FROM articles';
-        let queryParams = [];
-        
+        const queryParams = [];
+
         if (category && category !== 'general' && category !== 'all') {
             queryText += ' WHERE topic = $1';
             queryParams.push(category);
         }
-        
+
         queryText += ' ORDER BY published_at DESC LIMIT 40';
-        
         const result = await pool.query(queryText, queryParams);
 
-        // 包装成前端原本预期的格式，这样前端一行代码都不用改
         res.json({
             status: 200,
             success: true,
             message: 'Fetched from PostgreSQL Cloud',
             data: {
                 totalResults: result.rows.length,
-                articles: result.rows // 这里的字段名要确保和旧的 JSON 一致
-            }
+                articles: result.rows,
+            },
         });
     } catch (err) {
         console.error(err);
@@ -162,137 +185,174 @@ app.get('/top-headlines', async (req, res) => {
     }
 });
 
-// Country-specific headlines
 app.options('/country/:iso', cors());
-app.get("/country/:iso", (req, res) => {
-    let pageSize = parseInt(req.query.pageSize) || 80;
-    let page = parseInt(req.query.page) || 1;
+app.get('/country/:iso', (req, res) => {
+    const pageSize = parseInt(req.query.pageSize, 10) || 80;
+    const page = parseInt(req.query.page, 10) || 1;
     const country = req.params.iso;
-    let url = `https://newsapi.org/v2/top-headlines?country=${country}&page=${page}&pageSize=${pageSize}&apiKey=${process.env.API_KEY}`;
+    const url = `https://newsapi.org/v2/top-headlines?country=${country}&page=${page}&pageSize=${pageSize}&apiKey=${API_KEY}`;
     fetchNews(url, res);
 });
 
-// Comments Endpoints
 app.post('/comments', async (req, res) => {
     try {
         const { articleUrl, articleTitle, author, text } = req.body;
-
         if (!articleUrl || !author || !text) {
             return res.json({ success: false, error: 'Missing required fields' });
         }
 
-        const comment = new Comment({
-            articleUrl,
-            articleTitle: articleTitle || 'Unknown',
-            author,
-            text
-        });
+        const result = await pool.query(
+            `
+                INSERT INTO comments (article_url, article_title, author, text)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, article_url, article_title, author, text, likes, created_at
+            `,
+            [articleUrl, articleTitle || 'Unknown', author, text]
+        );
+        const row = result.rows[0];
 
-        await comment.save();
-        res.json({ success: true, data: comment, message: 'Comment posted successfully' });
+        return res.json({
+            success: true,
+            data: {
+                id: row.id,
+                articleUrl: row.article_url,
+                articleTitle: row.article_title,
+                author: row.author,
+                text: row.text,
+                likes: row.likes,
+                createdAt: row.created_at,
+            },
+            message: 'Comment posted successfully',
+        });
     } catch (error) {
-        res.json({ success: false, error: error.message });
+        return res.json({ success: false, error: error.message });
     }
 });
 
 app.get('/comments/:articleUrl', async (req, res) => {
     try {
         const decodedUrl = decodeURIComponent(req.params.articleUrl);
-        const comments = await Comment.find({ articleUrl: decodedUrl }).sort({ createdAt: -1 });
-        res.json({ success: true, data: comments });
+        const result = await pool.query(
+            `
+                SELECT id, article_url, article_title, author, text, likes, created_at
+                FROM comments
+                WHERE article_url = $1
+                ORDER BY created_at DESC
+            `,
+            [decodedUrl]
+        );
+
+        return res.json({
+            success: true,
+            data: result.rows.map((row) => ({
+                id: row.id,
+                articleUrl: row.article_url,
+                articleTitle: row.article_title,
+                author: row.author,
+                text: row.text,
+                likes: row.likes,
+                createdAt: row.created_at,
+            })),
+        });
     } catch (error) {
-        res.json({ success: false, error: error.message });
+        return res.json({ success: false, error: error.message });
     }
 });
 
 app.post('/comments/:commentId/like', async (req, res) => {
     try {
-        const comment = await Comment.findByIdAndUpdate(
-            req.params.commentId,
-            { $inc: { likes: 1 } },
-            { new: true }
+        const result = await pool.query(
+            `
+                UPDATE comments
+                SET likes = likes + 1
+                WHERE id = $1
+                RETURNING id, article_url, article_title, author, text, likes, created_at
+            `,
+            [req.params.commentId]
         );
-        res.json({ success: true, data: comment });
+
+        if (result.rows.length === 0) {
+            return res.json({ success: false, error: 'Comment not found' });
+        }
+
+        const row = result.rows[0];
+        return res.json({
+            success: true,
+            data: {
+                id: row.id,
+                articleUrl: row.article_url,
+                articleTitle: row.article_title,
+                author: row.author,
+                text: row.text,
+                likes: row.likes,
+                createdAt: row.created_at,
+            },
+        });
     } catch (error) {
-        res.json({ success: false, error: error.message });
+        return res.json({ success: false, error: error.message });
     }
 });
 
-// View Tracking
 app.post('/track-view', async (req, res) => {
     try {
         const { articleUrl, articleTitle } = req.body;
-
         if (!articleUrl) {
             return res.json({ success: false, error: 'Missing articleUrl' });
         }
 
-        const view = new View({
-            articleUrl,
-            articleTitle: articleTitle || 'Unknown',
-            userAgent: req.headers['user-agent']
-        });
+        await pool.query(
+            `
+                INSERT INTO article_views (article_url, article_title, user_agent)
+                VALUES ($1, $2, $3)
+            `,
+            [articleUrl, articleTitle || 'Unknown', req.headers['user-agent'] || null]
+        );
 
-        await view.save();
-        res.json({ success: true });
+        return res.json({ success: true });
     } catch (error) {
         console.error('View tracking error:', error);
-        res.json({ success: false });
+        return res.json({ success: false, error: error.message });
     }
 });
 
-// Get Article Statistics
 app.get('/stats/:articleUrl', async (req, res) => {
     try {
         const decodedUrl = decodeURIComponent(req.params.articleUrl);
-        const viewCount = await View.countDocuments({ articleUrl: decodedUrl });
-        const commentCount = await Comment.countDocuments({ articleUrl: decodedUrl });
+        const viewResult = await pool.query(
+            'SELECT COUNT(*)::int AS count FROM article_views WHERE article_url = $1',
+            [decodedUrl]
+        );
+        const commentResult = await pool.query(
+            'SELECT COUNT(*)::int AS count FROM comments WHERE article_url = $1',
+            [decodedUrl]
+        );
 
-        res.json({
+        const views = viewResult.rows[0]?.count || 0;
+        const comments = commentResult.rows[0]?.count || 0;
+
+        return res.json({
             success: true,
-            views: viewCount,
-            comments: commentCount,
-            engagement: viewCount + (commentCount * 10) // weight comments more
+            views,
+            comments,
+            engagement: views + (comments * 10),
         });
     } catch (error) {
-        res.json({ success: false, error: error.message });
+        return res.json({ success: false, error: error.message });
     }
 });
 
-// Server port
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/newsagg');
+async function startServer() {
+    try {
+        await ensureInteractionTables();
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
 
-// // Comment schema and model
-// const commentSchema = new mongoose.Schema({
-//     articleUrl: String,
-//     username: String,
-//     content: String,
-//     timestamp: { type: Date, default: Date.now }
-// });
-
-// const Comment = mongoose.model('Comment', commentSchema);
-
-// // Endpoints
-// app.post('/comments', async (req, res) => {
-//     try {
-//         const comment = new Comment(req.body);
-//         await comment.save();
-//         res.json({ success: true, data: comment });
-//     } catch (error) {
-//         res.json({ success: false, error: error.message });
-//     }
-// });
-
-// app.get('/comments/:articleUrl', async (req, res) => {
-//     try {
-//         const comments = await Comment.find({ articleUrl: req.params.articleUrl });
-//         res.json({ success: true, data: comments });
-//     } catch (error) {
-//         res.json({ success: false, error: error.message });
-//     }
-// });
+startServer();

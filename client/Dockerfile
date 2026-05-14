@@ -5,9 +5,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy dependensi dan jalankan install (Bisa gunakan npm ic atau install)
+# Copy dependensi dan jalankan install
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source dan jalankan kompresi untuk production
 COPY . .
