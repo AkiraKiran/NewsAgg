@@ -1,10 +1,12 @@
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
-import { Clock3, PlayCircle, ShieldAlert, Sparkles } from 'lucide-react';
+import { Clock3, PlayCircle, ShieldAlert, Sparkles, Bookmark } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { CATEGORY_BADGE_CLASS, TOPIC_TO_CATEGORY } from '../constants';
 import { getArticleId, NewsArticle, SentimentType } from '../services/newsAPI';
 import { ImageWithFallback } from './utils/ImageWithFallback';
+import { bookmarkService } from '../services/bookmarkService';
+import { useState } from 'react';
 
 const SENTIMENT_STYLE: Record<SentimentType, { bg: string; dot: string; dark: string }> = {
   positive: { bg: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500', dark: 'bg-emerald-900/40 text-emerald-300' },
@@ -26,13 +28,46 @@ interface NewsCardProps {
 }
 
 export function NewsCard({ article, index }: NewsCardProps) {
-  const { t, isDark } = useApp();
+  const { t, isDark, isAuthenticated, isBookmarkedById, bookmarks, setBookmarks, setAccountOpen } = useApp();
+  const [isBookmarking, setIsBookmarking] = useState(false);
   const articleId = getArticleId(article);
+  const isBookmarked = isBookmarkedById(articleId);
   const sentiment = article.sentiment.type;
   const sentStyle = SENTIMENT_STYLE[sentiment];
   const categoryClass = CATEGORY_BADGE_CLASS[TOPIC_TO_CATEGORY[article.topic]];
   const preview = article.aiSummary || article.description || 'No summary available';
   const secondaryImage = article.images.find((image) => !image.isPrimary)?.url;
+
+  const handleBookmarkClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isAuthenticated) {
+      setAccountOpen(true);
+      return;
+    }
+
+    setIsBookmarking(true);
+
+    if (isBookmarked) {
+      // Remove bookmark
+      const bookmarkId = bookmarks.find(b => b.article_id === articleId)?.id;
+      if (bookmarkId) {
+        const result = await bookmarkService.removeBookmark(bookmarkId);
+        if (result.success) {
+          setBookmarks(bookmarks.filter(b => b.id !== bookmarkId));
+        }
+      }
+    } else {
+      // Add bookmark
+      const result = await bookmarkService.addBookmark(article);
+      if (result.success && result.data) {
+        setBookmarks([...bookmarks, result.data]);
+      }
+    }
+
+    setIsBookmarking(false);
+  };
 
   return (
     <motion.div
@@ -58,6 +93,18 @@ export function NewsCard({ article, index }: NewsCardProps) {
               </div>
 
               <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <button
+                  onClick={handleBookmarkClick}
+                  disabled={isBookmarking}
+                  className={`inline-flex items-center justify-center p-2 rounded-full transition-all backdrop-blur-sm disabled:opacity-50 ${
+                    isBookmarked
+                      ? 'bg-amber-500/90 text-white'
+                      : 'bg-black/40 text-white hover:bg-black/60'
+                  }`}
+                >
+                  <Bookmark size={16} fill={isBookmarked ? 'currentColor' : 'none'} />
+                </button>
+
                 {article.videoUrl && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
                     <PlayCircle size={12} />

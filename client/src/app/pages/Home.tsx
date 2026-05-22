@@ -31,7 +31,7 @@ export function Home() {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       {/* Main content - two column layout with independent scrolling */}
-      <div className="flex gap-6 px-4 md:px-6 pt-6 md:pt-8 flex-1 min-h-0 max-w-[1600px] mx-auto w-full overflow-x-hidden">
+      <div className="flex gap-16 px-4 md:px-6 pt-6 md:pt-8 flex-1 min-h-0 max-w-[1600px] mx-auto w-full overflow-x-hidden">
         {/* News Grid - independent scrolling */}
         <div
           ref={newsColumnRef}
@@ -39,7 +39,7 @@ export function Home() {
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
-          <div className="pr-2 pb-50">
+          <div className="pb-50">
             <NewsGrid />
           </div>
 
@@ -64,7 +64,7 @@ export function Home() {
 
         {/* Sentiment Panel - independent scrolling on lg screens */}
         <div className="hidden lg:block w-72 xl:w-80 shrink-0 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          <div className="pr-2 pb-20">
+          <div className="pb-20">
             <SentimentPanel />
           </div>
         </div>

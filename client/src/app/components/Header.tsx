@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Search, X, Sun, Moon, ChevronDown, Globe, Menu } from 'lucide-react';
+import { Search, X, Sun, Moon, ChevronDown, Globe, Menu, Bookmark } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../contexts/AppContext';
 import { CATEGORIES, CATEGORY_LABELS, Category } from '../constants';
 import { Language } from '../i18n/translations';
 
 export function Header() {
-  const { t, isDark, toggleTheme, language, setLanguage, setSidebarOpen, searchQuery, setSearchQuery, selectedCategory, setSelectedCategory } = useApp();
+  const { t, isDark, toggleTheme, language, setLanguage, setSidebarOpen, searchQuery, setSearchQuery, selectedCategory, setSelectedCategory, user, bookmarks } = useApp();
   const navigate = useNavigate();
   const [catOpen, setCatOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
@@ -160,6 +160,22 @@ export function Header() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Bookmarks Link */}
+        {user && (
+          <Link
+            to="/bookmarks"
+            className={`relative p-2 rounded-lg transition-colors ${isDark ? 'text-slate-200 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-100'}`}
+            title="View bookmarks"
+          >
+            <Bookmark size={18} />
+            {bookmarks.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-xs font-bold flex items-center justify-center">
+                {bookmarks.length > 9 ? '9+' : bookmarks.length}
+              </span>
+            )}
+          </Link>
+        )}
 
         {/* Theme Toggle */}
         <button
