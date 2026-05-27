@@ -15,8 +15,10 @@ const axios = require('axios');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
+const { OAuth2Client } = require('google-auth-library');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 app.use(cors());
 app.use(express.json());
@@ -408,6 +410,55 @@ app.post('/auth/login', async (req, res) => {
     } catch (error) {
         console.error('Login error:', error);
         res.json({ success: false, error: error.message });
+    }
+});
+
+// Google OAuth endpoint
+app.post('/auth/google', async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.json({ success: false, error: 'No token provided' });
+        }
+
+        // Verify the Google token
+        const ticket = await googleClient.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const googleId = payload.sub;
+        const email = payload.email;
+        const username = payload.name || email.split('@')[0];
+
+        // Check if user exists
+        const userResult = await pool.query(
+            'SELECT id, email, username FROM users WHERE email = $1',
+            [email]
+        );
+
+        if (userResult.rows.length === 0) {
+            return res.status(401).json({
+                success: false,
+                error: 'User not found. Please sign up first.',
+                email: email,
+                username: username
+            });
+        }
+
+        const user = userResult.rows[0];
+        const authToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+        res.json({
+            success: true,
+            token: authToken,
+            user: { id: user.id, username: user.username, email: user.email }
+        });
+    } catch (err) {
+        console.error('Google auth error:', err);
+        res.status(401).json({ success: false, error: 'Google authentication failed' });
     }
 });
 

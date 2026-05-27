@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { X, UserPlus, LogIn, LogOut, Bookmark, Settings, Sun, Moon } from 'lucide-react';
 import { useState } from 'react';
+import { GoogleLogin } from '@react-oauth/google';
 import { useApp } from '../contexts/AppContext';
 import { authService } from '../services/authService';
 
@@ -12,6 +13,39 @@ export function ProfileSidebar() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pendingGoogleSignup, setPendingGoogleSignup] = useState(false);
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Send credential to backend
+      const result = await authService.loginWithGoogle(credentialResponse.credential);
+
+      if (result.success && result.user && result.token) {
+        authService.setToken(result.token);
+        authService.setUser(result.user);
+        setUser(result.user);
+        setMode('menu');
+        setError('');
+      } else if (result.error?.includes('not found')) {
+        // User doesn't exist - show signup
+        setPendingGoogleSignup(true);
+        setEmail(result.email || '');
+        setUsername(result.username || '');
+        setMode('signup');
+        setError('Please complete your signup with a password');
+      } else {
+        setError(result.error || 'Google login failed');
+      }
+    } catch (err) {
+      console.error('Google login error:', err);
+      setError('Google authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -214,11 +248,23 @@ export function ProfileSidebar() {
                   <button
                     onClick={handleLogin}
                     disabled={loading}
-                    className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed mb-3"
+                    className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
                   >
                     <LogIn size={18} />
                     {loading ? 'Signing in...' : 'Sign In'}
                   </button>
+
+                  {/* Google Login Button */}
+                  <div className="mb-4">
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => setError('Google login failed')}
+                      theme={isDark ? 'dark' : 'light'}
+                      size="large"
+                      width="100%"
+                      text="signin_with"
+                    />
+                  </div>
 
                   <div className="text-center">
                     <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} mb-2`}>
@@ -291,11 +337,25 @@ export function ProfileSidebar() {
                   <button
                     onClick={handleSignup}
                     disabled={loading}
-                    className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed mb-3"
+                    className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
                   >
                     <UserPlus size={18} />
                     {loading ? 'Creating account...' : 'Create Account'}
                   </button>
+
+                  {/* Google Signup Button */}
+                  {!pendingGoogleSignup && (
+                    <div className="mb-4">
+                      <GoogleLogin
+                        onSuccess={handleGoogleSuccess}
+                        onError={() => setError('Google signup failed')}
+                        theme={isDark ? 'dark' : 'light'}
+                        size="large"
+                        width="100%"
+                        text="signup_with"
+                      />
+                    </div>
+                  )}
 
                   <div className="text-center">
                     <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'} mb-2`}>
@@ -305,6 +365,7 @@ export function ProfileSidebar() {
                       onClick={() => {
                         setMode('login');
                         setError('');
+                        setPendingGoogleSignup(false);
                       }}
                       className={`text-sm font-medium transition ${isDark ? 'text-cyan-400 hover:text-cyan-300' : 'text-cyan-600 hover:text-cyan-700'}`}
                     >

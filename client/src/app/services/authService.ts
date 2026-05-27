@@ -45,6 +45,19 @@ export const authService = {
     localStorage.removeItem('user');
   },
 
+  loginWithGoogle: async (googleToken: string): Promise<AuthResponse> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: googleToken })
+      });
+      return res.json();
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  },
+
   getToken: () => localStorage.getItem('authToken'),
   
   setToken: (token: string) => localStorage.setItem('authToken', token),
