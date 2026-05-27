@@ -1,3 +1,10 @@
+<<<<<<< Updated upstream
 node_modules
 .env
 .hf.env
+=======
+my_project/
+venv/
+__pycache__/
+*.pyc
+>>>>>>> Stashed changes
