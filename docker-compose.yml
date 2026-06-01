@@ -4,13 +4,13 @@ services:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - "${SERVER_HOST_PORT:-3000}:3000"
-    env_file:
-      - ./server/.env
-      - ./server/.hf.env
+      - "3000:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      NEON_DSN: ${NEON_DSN}
+      API_KEY: ${API_KEY}
     restart: unless-stopped
 
   client:

@@ -2,11 +2,27 @@ import { Outlet } from 'react-router';
 import { useApp } from '../contexts/AppContext';
 import { Header } from '../components/Header';
 import { ProfileSidebar } from '../components/ProfileSidebar';
-import { AccountDrawer } from '../components/AccountDrawer';
 import { ScrollToTop } from '../components/ScrollToTop';
+import { Footer } from '../components/Footer';
+import { useState, useEffect } from 'react';
 
 export function Root() {
   const { isDark } = useApp();
+  const [showFooter, setShowFooter] = useState(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const distanceFromBottom = window.innerHeight - e.clientY;
+      setShowFooter(distanceFromBottom < 120);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  const handleFooterMouseLeave = () => {
+    setShowFooter(false);
+  };
 
   return (
     <div
@@ -25,9 +41,11 @@ export function Root() {
         <Outlet />
       </main>
 
+      {/* Footer */}
+      <Footer isVisible={showFooter} onMouseLeave={handleFooterMouseLeave} />
+
       {/* Global overlays */}
       <ProfileSidebar />
-      <AccountDrawer />
       <ScrollToTop />
     </div>
   );

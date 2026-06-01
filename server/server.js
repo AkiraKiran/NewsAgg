@@ -4,6 +4,13 @@ const { Pool } = require('pg');
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const bcryptjs = require('bcryptjs');
+const { OAuth2Client } = require('google-auth-library');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -30,6 +37,80 @@ async function ensureInteractionTables() {
         );
     `);
 
+// ─────────────────── PostgreSQL Tables ───────────────────
+// Create users table if it doesn't exist
+const createUsersTable = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        username VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        avatar VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Users table created or already exists');
+  } catch (err) {
+    console.error('Error creating users table:', err);
+  }
+};
+
+// Create bookmarks table if it doesn't exist
+const createBookmarksTable = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        article_id VARCHAR(500) NOT NULL,
+        article_title TEXT,
+        article_url TEXT,
+        url_to_image VARCHAR(500),
+        source_name VARCHAR(255),
+        topic VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(user_id, article_id)
+      )
+    `);
+    console.log('Bookmarks table created or already exists');
+  } catch (err) {
+    console.error('Error creating bookmarks table:', err);
+  }
+};
+
+// Initialize tables
+createUsersTable();
+createBookmarksTable();
+
+// ─────────────────── JWT Middleware ───────────────────
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'No token provided' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    res.status(401).json({ success: false, error: 'Invalid or expired token' });
+  }
+};
+
+// Comment Schema
+const commentSchema = new mongoose.Schema({
+    articleUrl: String,
+    articleTitle: String,
+    author: String,
+    text: String,
+    likes: { type: Number, default: 0 },
+    createdAt: { type: Date, default: Date.now }
+});
     await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_comments_article_url
         ON comments (article_url);
@@ -354,6 +435,220 @@ app.get('/stats/:articleUrl', async (req, res) => {
     }
 });
 
+// ─────────────────── Authentication Routes ───────────────────
+// Register
+app.post('/auth/register', async (req, res) => {
+    try {
+        const { email, username, password } = req.body;
+        
+        if (!email || !username || !password) {
+            return res.json({ success: false, error: 'Missing required fields' });
+        }
+
+        // Check if user already exists
+        const userCheck = await pool.query(
+            'SELECT id FROM users WHERE email = $1 OR username = $2',
+            [email, username]
+        );
+
+        if (userCheck.rows.length > 0) {
+            return res.json({ success: false, error: 'Email or username already exists' });
+        }
+
+        // Hash password
+        const hashedPassword = await bcryptjs.hash(password, 10);
+
+        // Create user
+        const result = await pool.query(
+            'INSERT INTO users (email, username, password) VALUES ($1, $2, $3) RETURNING id, email, username',
+            [email, username, hashedPassword]
+        );
+
+        const user = result.rows[0];
+        const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+        res.json({
+            success: true,
+            token,
+            user: { id: user.id, username: user.username, email: user.email }
+        });
+    } catch (error) {
+        console.error('Register error:', error);
+        res.json({ success: false, error: error.message });
+    }
+});
+
+// Login
+app.post('/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.json({ success: false, error: 'Missing email or password' });
+        }
+
+        // Find user
+        const result = await pool.query(
+            'SELECT id, email, username, password FROM users WHERE email = $1',
+            [email]
+        );
+
+        if (result.rows.length === 0) {
+            return res.json({ success: false, error: 'User not found' });
+        }
+
+        const user = result.rows[0];
+
+        // Check password
+        const isPasswordValid = await bcryptjs.compare(password, user.password);
+        if (!isPasswordValid) {
+            return res.json({ success: false, error: 'Invalid password' });
+        }
+
+        const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+        res.json({
+            success: true,
+            token,
+            user: { id: user.id, username: user.username, email: user.email }
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.json({ success: false, error: error.message });
+    }
+});
+
+// Google OAuth endpoint
+app.post('/auth/google', async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.json({ success: false, error: 'No token provided' });
+        }
+
+        // Verify the Google token
+        const ticket = await googleClient.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const googleId = payload.sub;
+        const email = payload.email;
+        const username = payload.name || email.split('@')[0];
+
+        // Check if user exists
+        const userResult = await pool.query(
+            'SELECT id, email, username FROM users WHERE email = $1',
+            [email]
+        );
+
+        if (userResult.rows.length === 0) {
+            return res.status(401).json({
+                success: false,
+                error: 'User not found. Please sign up first.',
+                email: email,
+                username: username
+            });
+        }
+
+        const user = userResult.rows[0];
+        const authToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+        res.json({
+            success: true,
+            token: authToken,
+            user: { id: user.id, username: user.username, email: user.email }
+        });
+    } catch (err) {
+        console.error('Google auth error:', err);
+        res.status(401).json({ success: false, error: 'Google authentication failed' });
+    }
+});
+
+// ─────────────────── Bookmark Routes ───────────────────
+// Add bookmark
+app.post('/bookmarks', verifyToken, async (req, res) => {
+    try {
+        const { articleId, articleTitle, articleUrl, urlToImage, sourceName, topic } = req.body;
+
+        if (!articleId || !articleUrl) {
+            return res.json({ success: false, error: 'Missing required fields' });
+        }
+
+        const result = await pool.query(
+            `INSERT INTO bookmarks (user_id, article_id, article_title, article_url, url_to_image, source_name, topic)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING *`,
+            [req.userId, articleId, articleTitle, articleUrl, urlToImage, sourceName, topic]
+        );
+
+        res.json({ success: true, data: result.rows[0] });
+    } catch (error) {
+        // Check if it's a duplicate error
+        if (error.code === '23505') {
+            return res.json({ success: false, error: 'Article already bookmarked' });
+        }
+        console.error('Bookmark add error:', error);
+        res.json({ success: false, error: error.message });
+    }
+});
+
+// Get user bookmarks
+app.get('/bookmarks', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT * FROM bookmarks WHERE user_id = $1 ORDER BY created_at DESC',
+            [req.userId]
+        );
+
+        res.json({ success: true, data: result.rows });
+    } catch (error) {
+        console.error('Bookmarks fetch error:', error);
+        res.json({ success: false, error: error.message });
+    }
+});
+
+// Remove bookmark
+app.delete('/bookmarks/:bookmarkId', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'DELETE FROM bookmarks WHERE id = $1 AND user_id = $2 RETURNING id',
+            [req.params.bookmarkId, req.userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.json({ success: false, error: 'Bookmark not found' });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Bookmark delete error:', error);
+        res.json({ success: false, error: error.message });
+    }
+});
+
+// Check if article is bookmarked
+app.get('/bookmarks/check/:articleId', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT id FROM bookmarks WHERE user_id = $1 AND article_id = $2',
+            [req.userId, req.params.articleId]
+        );
+
+        res.json({ 
+            success: true, 
+            isBookmarked: result.rows.length > 0,
+            bookmarkId: result.rows[0]?.id || null
+        });
+    } catch (error) {
+        console.error('Bookmark check error:', error);
+        res.json({ success: false, error: error.message });
+    }
+});
+
+// Start server
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
