@@ -1,23 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Search, X, Sun, Moon, ChevronDown, Globe, Menu, Bookmark } from 'lucide-react';
+import { Search, X, Sun, Moon, ChevronDown, Globe, Menu, Bookmark, SlidersHorizontal } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../contexts/AppContext';
-import { CATEGORIES, CATEGORY_LABELS, Category } from '../constants';
 import { Language } from '../i18n/translations';
+import { FilterSheet } from './ui/FilterSheet';
 
 export function Header() {
-  const { t, isDark, toggleTheme, language, setLanguage, setSidebarOpen, searchQuery, setSearchQuery, selectedCategory, setSelectedCategory, user, bookmarks } = useApp();
+  const { t, isDark, toggleTheme, language, setLanguage, setSidebarOpen, searchQuery, setSearchQuery, selectedCategory, selectedSources, selectedSentiment, user, bookmarks, avatarSrc } = useApp();
   const navigate = useNavigate();
-  const [catOpen, setCatOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const catRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false);
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
       if (langRef.current && !langRef.current.contains(e.target as Node)) setLangOpen(false);
     }
     document.addEventListener('mousedown', handleClick);
@@ -37,9 +37,10 @@ export function Header() {
     { code: 'zhTW', label: t.zhTraditional },
   ];
 
-  const catLabel = selectedCategory === 'all'
-    ? t.allCategories
-    : CATEGORY_LABELS[selectedCategory];
+  const filterActiveCount =
+    (selectedCategory !== 'all' ? 1 : 0) +
+    selectedSources.length +
+    (selectedSentiment !== 'all' ? 1 : 0);
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 h-16 flex items-center px-4 md:px-6 gap-3 border-b backdrop-blur-xl transition-colors duration-300 ${isDark ? 'bg-slate-900/90 border-slate-700/50' : 'bg-white/85 border-white/50'}`}>
@@ -50,10 +51,10 @@ export function Header() {
           className={`w-9 h-9 rounded-full overflow-hidden border-2 transition-transform hover:scale-105 active:scale-95 flex-shrink-0 ${isDark ? 'border-cyan-400' : 'border-cyan-500'}`}
           aria-label="Open profile"
         >
-          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=NewsAgg2026" alt="Avatar" className="w-full h-full object-cover bg-gradient-to-br from-cyan-400 to-pink-400" />
+          <img src={avatarSrc} alt="Avatar" className="w-full h-full object-cover bg-gradient-to-br from-cyan-400 to-pink-400" />
         </button>
         <Link to="/" className="flex-shrink-0">
-          <span className="text-xl font-bold bg-gradient-to-r from-cyan-500 to-pink-500 bg-clip-text text-transparent" style={{ fontFamily: 'Poppins, sans-serif' }}>
+          <span className="font-poppins text-xl font-bold bg-gradient-to-r from-cyan-500 to-pink-500 bg-clip-text text-transparent">
             NewsAgg
           </span>
         </Link>
@@ -69,8 +70,7 @@ export function Header() {
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={handleSearch}
             placeholder={t.searchPlaceholder}
-            className="flex-1 bg-transparent outline-none text-sm placeholder:text-gray-400"
-            style={{ fontFamily: 'Inter, sans-serif' }}
+            className="flex-1 bg-transparent outline-none text-sm placeholder:text-gray-400 font-sans"
           />
           <AnimatePresence>
             {searchQuery && (
@@ -90,48 +90,28 @@ export function Header() {
 
       {/* Right: Controls */}
       <div className="flex items-center gap-2 ml-auto">
-        {/* Category Dropdown */}
-        <div ref={catRef} className="relative hidden md:block">
+        {/* Filter (category + source) */}
+        <div ref={filterRef} className="relative">
           <button
-            onClick={() => { setCatOpen(p => !p); setLangOpen(false); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${isDark ? 'text-slate-200 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-100'}`}
+            onClick={() => { setFilterOpen(p => !p); setLangOpen(false); }}
+            aria-label={t.filter}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filterActiveCount > 0 ? 'text-indigo-500' : isDark ? 'text-slate-200 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-100'}`}
           >
-            {catLabel}
-            <ChevronDown size={14} className={`transition-transform ${catOpen ? 'rotate-180' : ''}`} />
-          </button>
-          <AnimatePresence>
-            {catOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.15 }}
-                className={`absolute right-0 top-full mt-2 w-48 rounded-xl border shadow-xl overflow-hidden z-50 max-h-[50vh] overflow-y-auto ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-gray-100'}`}
-              >
-                <button
-                  onClick={() => { setSelectedCategory('all'); setCatOpen(false); }}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${selectedCategory === 'all' ? 'text-cyan-500 font-semibold' : isDark ? 'text-slate-200 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                >
-                  {t.allCategories}
-                </button>
-                {CATEGORIES.map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => { setSelectedCategory(cat); setCatOpen(false); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${selectedCategory === cat ? 'text-cyan-500 font-semibold' : isDark ? 'text-slate-200 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                  >
-                    {CATEGORY_LABELS[cat]}
-                  </button>
-                ))}
-              </motion.div>
+            <SlidersHorizontal size={16} />
+            <span className="hidden md:inline">{t.filter}</span>
+            {filterActiveCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-indigo-500 text-white text-[11px] font-bold">
+                {filterActiveCount}
+              </span>
             )}
-          </AnimatePresence>
+          </button>
+          <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} />
         </div>
 
         {/* Language Switcher */}
         <div ref={langRef} className="relative hidden md:block">
           <button
-            onClick={() => { setLangOpen(p => !p); setCatOpen(false); }}
+            onClick={() => { setLangOpen(p => !p); setFilterOpen(false); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${isDark ? 'text-slate-200 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-100'}`}
           >
             <Globe size={14} />
@@ -223,14 +203,18 @@ export function Header() {
                 className="flex-1 bg-transparent outline-none text-sm"
               />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => { setSelectedCategory('all'); setMobileMenuOpen(false); }} className={`px-3 py-1.5 rounded-lg text-sm ${selectedCategory === 'all' ? 'bg-cyan-500 text-white' : isDark ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-700'}`}>{t.allCategories}</button>
-              {CATEGORIES.map(cat => (
-                <button key={cat} onClick={() => { setSelectedCategory(cat as Category); setMobileMenuOpen(false); }} className={`px-3 py-1.5 rounded-lg text-sm ${selectedCategory === cat ? 'bg-cyan-500 text-white' : isDark ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-700'}`}>
-                  {CATEGORY_LABELS[cat]}
-                </button>
-              ))}
-            </div>
+            <button
+              onClick={() => { setFilterOpen(true); setMobileMenuOpen(false); }}
+              className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-colors ${isDark ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            >
+              <SlidersHorizontal size={16} />
+              {t.filter}
+              {filterActiveCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-indigo-500 text-white text-[11px] font-bold">
+                  {filterActiveCount}
+                </span>
+              )}
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

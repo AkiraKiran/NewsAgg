@@ -1,0 +1,30 @@
+/**
+ * Design tokens — Editorial Premium Dark (see CLAUDE.md "UI/UX PRODUCTION REDESIGN").
+ *
+ * NOTE: imported BEFORE theme.css so the shadcn tokens in theme.css keep
+ * precedence on the shared names (--accent, --border). The redesign-specific
+ * tokens below (--positive, --negative, --surface, --text-*, --font-*) are
+ * additive and safe to consume directly via var(...).
+ */
+:root {
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --positive: #10b981;
+  --neutral: #f59e0b;
+  --negative: #f43f5e;
+  --surface: #ffffff;
+  --surface-alt: #f8fafc;
+  --border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --font-display: 'Poppins', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+}
+
+.dark {
+  --surface: #0f172a;
+  --surface-alt: #1e293b;
+  --border: rgba(148, 163, 184, 0.15);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+}

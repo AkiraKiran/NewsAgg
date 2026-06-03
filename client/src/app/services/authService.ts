@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export interface User {
   id: number;
@@ -11,6 +11,10 @@ export interface AuthResponse {
   token?: string;
   user?: User;
   error?: string;
+  // Returned by the Google flow when the account doesn't exist yet, so the
+  // signup form can be pre-filled (see ProfileSidebar.handleGoogleSuccess).
+  email?: string;
+  username?: string;
 }
 
 export const authService = {

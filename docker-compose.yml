@@ -5,12 +5,10 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+    env_file: ./server/.env          # loads NeonDB URL + all API keys at runtime
     environment:
       NODE_ENV: production
-      PORT: 3000
-      DATABASE_URL: ${DATABASE_URL}
-      NEON_DSN: ${NEON_DSN}
-      API_KEY: ${API_KEY}
+      PORT: 3000                      # operational override; .env has no PORT
     restart: unless-stopped
 
   client:
@@ -26,3 +24,17 @@ services:
     environment:
       NODE_ENV: production
     restart: unless-stopped
+
+  scraper:
+    build:
+      context: ./scraper
+      dockerfile: Dockerfile
+    env_file: ./server/.env          # NEONDB_URL + GEMINI_API_KEY + HF_TOKEN live here
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    profiles:
+      - scraper
+    restart: "no"
+
+volumes:
+  hf_cache:

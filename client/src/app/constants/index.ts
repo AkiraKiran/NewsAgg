@@ -68,6 +68,51 @@ export const TOPIC_BADGE_CLASS: Record<CategoryTopic, string> = {
   Science: CATEGORY_BADGE_CLASS.science,
 };
 
+// ─── Sources ────────────────────────────────────────────────────────────────
+// Stable source identifiers used by the source filter (AppContext.selectedSources)
+// and the scraper. `matchers` are lowercase substrings tested against an article's
+// source id / name / domain, so filtering keeps working regardless of how the live
+// DB labels each source.
+
+export interface SourceOption {
+  id: string; // stable key stored in selectedSources, e.g. 'cnn'
+  name: string; // display label
+  domain: string; // canonical domain — also used to fetch a favicon logo
+  matchers: string[];
+}
+
+export const SOURCES: SourceOption[] = [
+  { id: 'cnn', name: 'CNN', domain: 'edition.cnn.com', matchers: ['cnn'] },
+  { id: 'bbc', name: 'BBC', domain: 'bbc.com', matchers: ['bbc'] },
+  {
+    id: 'aljazeera',
+    name: 'Al Jazeera',
+    domain: 'aljazeera.com',
+    matchers: ['aljazeera', 'al jazeera', 'jazeera'],
+  },
+  { id: 'yahoo_tw', name: 'Yahoo TW', domain: 'tw.news.yahoo.com', matchers: ['yahoo'] },
+];
+
+/** Favicon-based logo for a source domain (Google's public favicon service). */
+export const sourceLogoUrl = (domain: string): string =>
+  `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+/**
+ * Resolve an article's source to one of the known SOURCES ids, or null if it
+ * matches none. Tests id, name and domain so it works regardless of how the live
+ * DB labels the source.
+ */
+export const matchSourceId = (
+  source: { id?: string | null; name?: string | null; domain?: string | null }
+): string | null => {
+  const haystack = [source.id, source.name, source.domain]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (!haystack) return null;
+  return SOURCES.find((s) => s.matchers.some((m) => haystack.includes(m)))?.id ?? null;
+};
+
 export const COUNTRIES = [
   { code: 'us', name: 'United States' },
   { code: 'id', name: 'Indonesia' },

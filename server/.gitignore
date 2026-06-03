@@ -1,3 +1,5 @@
 node_modules
 .env
 .hf.env
+dist
+*.log

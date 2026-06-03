@@ -5,7 +5,8 @@ import { Globe } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { NewsCard } from '../components/NewsCard';
 import { SentimentPanel } from '../components/SentimentPanel';
-import { newsAPI, NewsArticle } from '../services/newsAPI';
+import { newsAPI } from '../services/newsAPI';
+import type { NewsArticle } from '../types/article';
 import { COUNTRIES } from '../constants';
 
 export function CountryPage() {
@@ -73,7 +74,7 @@ export function CountryPage() {
           <Globe size={20} className="text-white" />
         </div>
         <div>
-          <h1 className={`font-bold ${isDark ? 'text-slate-100' : 'text-gray-900'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+          <h1 className={`font-poppins font-bold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
             {country?.name || iso?.toUpperCase()} News
           </h1>
           <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{t.filterByCountry}</p>

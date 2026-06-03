@@ -1,24 +1,19 @@
-# server/Dockerfile
-FROM node:22-bookworm-slim
-
-# Perbarui sistem Debian dan hapus package usang untuk mengurangi vulnerability
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends python3 python3-pip python3-venv && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Stage 1 — compile TypeScript then prune devDeps
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
-
-# Copy deps dan install
 COPY package*.json ./
-RUN npm ci --omit=dev
-
-# Copy all source
+RUN npm ci --legacy-peer-deps
 COPY . .
+RUN npm run build && npm prune --omit=dev --legacy-peer-deps
+
+# Stage 2 — lean production image
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY package.json ./
 
 EXPOSE 3000
-
-# Jalankan server
 CMD ["npm", "start"]

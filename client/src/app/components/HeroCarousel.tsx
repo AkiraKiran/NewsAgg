@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Clock3, TrendingUp } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { TOPIC_BADGE_CLASS } from '../constants';
-import { getArticleId, newsAPI, NewsArticle, SentimentType } from '../services/newsAPI';
+import { getArticleId, newsAPI } from '../services/newsAPI';
+import type { NewsArticle } from '../types/article';
+import type { SentimentType } from '../types/sentiment';
 
 interface SentimentBadgeProps {
   sentiment: SentimentType;
@@ -35,9 +37,9 @@ export function HeroCarousel() {
   useEffect(() => {
     const fetchHeadlines = async () => {
       try {
-        const response = await newsAPI.getTopHeadlines('all', 5);
+        const response = await newsAPI.getTopHeadlines('all', 10);
         if (response.success && response.data?.articles) {
-          setHeadlines(response.data.articles.slice(0, 5));
+          setHeadlines(response.data.articles.slice(0, 10));
         }
       } catch (err) {
         console.error('Failed to fetch headlines:', err);
@@ -140,7 +142,7 @@ export function HeroCarousel() {
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${topicClass}`}>{article.topic}</span>
               <span className="text-white/70 text-[11px] truncate">{article.source.name}</span>
             </div>
-            <h2 className="text-white text-lg md:text-xl lg:text-2xl font-bold leading-snug mb-1.5 group-hover:text-cyan-300 transition-colors line-clamp-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
+            <h2 className="font-poppins text-white text-lg md:text-xl lg:text-2xl font-bold leading-snug mb-1.5 group-hover:text-cyan-300 transition-colors line-clamp-2">
               {article.title}
             </h2>
             <p className="text-white/70 text-xs md:text-sm line-clamp-1 mb-2 max-w-2xl hidden sm:block">

@@ -4,7 +4,8 @@ import { TrendingUp } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { NewsCard } from '../components/NewsCard';
 import { SentimentPanel } from '../components/SentimentPanel';
-import { newsAPI, NewsArticle } from '../services/newsAPI';
+import { getRankedHeadlines } from '../services/newsAPI';
+import type { NewsArticle } from '../types/article';
 
 export function TopHeadlines() {
   const { t, isDark } = useApp();
@@ -16,12 +17,8 @@ export function TopHeadlines() {
     const fetchHeadlines = async () => {
       try {
         setLoading(true);
-        const response = await newsAPI.getTopHeadlines('all', 80, 1);
-        if (response.success && response.data?.articles) {
-          setArticles(response.data.articles);
-        } else {
-          setError(response.message || 'Failed to fetch headlines');
-        }
+        const headlines = await getRankedHeadlines(10);
+        setArticles(headlines);
       } catch (err) {
         setError('Failed to fetch headlines. Please try again later.');
         console.error('Failed to fetch headlines:', err);
@@ -68,10 +65,10 @@ export function TopHeadlines() {
           <TrendingUp size={20} className="text-white" />
         </div>
         <div>
-          <h1 className={`font-bold ${isDark ? 'text-slate-100' : 'text-gray-900'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+          <h1 className={`font-poppins font-bold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
             {t.topHeadlines}
           </h1>
-          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Today's most important stories</p>
+          <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{t.topHeadlinesSubtitle}</p>
         </div>
       </motion.div>
 

@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { bookmarkService } from '../services/bookmarkService';
 import { Link } from 'react-router';
-import { Clock3, Bookmark, AlertCircle } from 'lucide-react';
+import { Bookmark, AlertCircle } from 'lucide-react';
 
 export function BookmarksPage() {
-  const { user, isDark, t, bookmarks, setBookmarks } = useApp();
+  const { user, isDark, bookmarks, setBookmarks } = useApp();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -63,7 +63,7 @@ export function BookmarksPage() {
       <div className="max-w-6xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-8">
-          <h1 className={`text-4xl font-bold mb-2 ${isDark ? 'text-slate-100' : 'text-gray-900'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+          <h1 className={`font-poppins text-4xl font-bold mb-2 ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
             My Bookmarks
           </h1>
           <p className={`text-lg ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
@@ -139,7 +139,7 @@ export function BookmarksPage() {
                   )}
 
                   {/* Title */}
-                  <h3 className={`font-semibold leading-snug mb-3 line-clamp-2 ${isDark ? 'text-slate-100' : 'text-gray-900'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+                  <h3 className={`font-poppins font-semibold leading-snug mb-3 line-clamp-2 ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
                     {bookmark.article_title || 'Untitled'}
                   </h3>
 

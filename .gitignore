@@ -1,3 +1,8 @@
 node_modules
 .env
 .hf.env
+CLAUDE.md
+skills
+ui-ux-pro-max-skill
+.env.local
+.claude

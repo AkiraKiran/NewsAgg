@@ -3,7 +3,9 @@ import { motion } from 'motion/react';
 import { Clock3, PlayCircle, ShieldAlert, Sparkles, Bookmark } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { CATEGORY_BADGE_CLASS, TOPIC_TO_CATEGORY } from '../constants';
-import { getArticleId, NewsArticle, SentimentType } from '../services/newsAPI';
+import { getArticleId } from '../services/newsAPI';
+import type { NewsArticle } from '../types/article';
+import type { SentimentType } from '../types/sentiment';
 import { ImageWithFallback } from './utils/ImageWithFallback';
 import { bookmarkService } from '../services/bookmarkService';
 import { useState } from 'react';
@@ -74,7 +76,7 @@ export function NewsCard({ article, index }: NewsCardProps) {
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.4) }}
-      whileHover={{ y: -4 }}
+      whileHover={{ y: -2 }}
       className="group"
     >
       <Link to={`/article/${articleId}`} className="block h-full">
@@ -158,11 +160,11 @@ export function NewsCard({ article, index }: NewsCardProps) {
               </div>
             </div>
 
-            <h3 className={`font-semibold leading-snug mb-2 line-clamp-2 group-hover:text-cyan-500 transition-colors ${isDark ? 'text-slate-100' : 'text-gray-900'}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+            <h3 className={`font-poppins font-semibold leading-snug mb-2 line-clamp-2 group-hover:text-cyan-500 transition-colors ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
               {article.title}
             </h3>
 
-            <p className={`text-sm line-clamp-4 flex-1 mb-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            <p className={`text-sm line-clamp-2 flex-1 mb-4 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
               {preview}
             </p>
 
@@ -197,9 +199,9 @@ export function NewsCard({ article, index }: NewsCardProps) {
 
             <div className={`flex items-center justify-between gap-3 mt-2.5 text-[11px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
               <span className="truncate opacity-80">{article.source.domain || t.source}</span>
-              {typeof article.aiRelevance === 'number' && (
+              {typeof article.aiConfidence === 'number' && (
                 <span className={`font-semibold px-2 py-0.5 rounded ${isDark ? 'text-cyan-300 bg-cyan-500/10' : 'text-cyan-700 bg-cyan-50'}`}>
-                  AI {(article.aiRelevance * 100).toFixed(0)}%
+                  AI {(article.aiConfidence * 100).toFixed(0)}%
                 </span>
               )}
             </div>

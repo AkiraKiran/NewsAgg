@@ -1,22 +1,20 @@
-import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { newsAPI, NewsArticle } from '../services/newsAPI';
+import { matchSourceId } from '../constants';
+import { newsAPI } from '../services/newsAPI';
+import type { NewsArticle } from '../types/article';
 import { NewsCard } from './NewsCard';
 import { HeroCarousel } from './HeroCarousel';
 
 const PER_PAGE = 9;
 
 export function NewsGrid() {
-  const { t, isDark, selectedCategory, searchQuery } = useApp();
+  const { t, isDark, selectedCategory, selectedSources, selectedSentiment, searchQuery } = useApp();
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [visibleCount, setVisibleCount] = useState(9);
-  const [showPagination, setShowPagination] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PER_PAGE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Fetch articles based on category
   useEffect(() => {
@@ -53,11 +51,21 @@ export function NewsGrid() {
             );
           }
 
+          // Filter by selected sources (multi-select; empty = all sources)
+          if (selectedSources.length > 0) {
+            filtered = filtered.filter((a) => {
+              const sourceId = matchSourceId(a.source);
+              return sourceId !== null && selectedSources.includes(sourceId);
+            });
+          }
+
+          // Filter by sentiment (positive | neutral | negative; 'all' = no filter)
+          if (selectedSentiment !== 'all') {
+            filtered = filtered.filter((a) => a.sentiment.type === selectedSentiment);
+          }
+
           setArticles(filtered);
-          setTotalPages(Math.max(1, Math.ceil(filtered.length / PER_PAGE)));
-          setPage(1);
           setVisibleCount(PER_PAGE);
-          setShowPagination(false);
         } else {
           setError(response.message || 'Failed to fetch news');
         }
@@ -70,29 +78,36 @@ export function NewsGrid() {
     };
 
     fetchNews();
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, selectedSources, selectedSentiment, searchQuery]);
 
-  const currentArticles = showPagination
-    ? articles.slice((page - 1) * PER_PAGE, page * PER_PAGE)
-    : articles.slice(0, visibleCount);
+  const currentArticles = articles.slice(0, visibleCount);
+  const hasMore = visibleCount < articles.length;
 
-  const canLoadMore = !showPagination && visibleCount < articles.length;
+  // Infinite scroll: reveal the next batch when the sentinel scrolls into view.
+  // Re-running on visibleCount keeps loading while the sentinel stays visible
+  // (e.g. tall viewports) until everything is shown. rootMargin pre-loads early.
+  useEffect(() => {
+    if (!hasMore) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
 
-  const handleLoadMore = () => {
-    // Load all remaining articles at once
-    setVisibleCount(articles.length);
-  };
-
-  const handlePageChange = (p: number) => {
-    setPage(p);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + PER_PAGE, articles.length));
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, articles.length, visibleCount]);
 
   if (loading) {
     return (
       <div className={`flex flex-col items-center justify-center py-20 ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
         <div className="animate-spin text-3xl mb-4">⏳</div>
-        <p className="text-lg font-medium">Loading headlines...</p>
+        <p className="text-lg font-medium">{t.loading}</p>
       </div>
     );
   }
@@ -125,74 +140,20 @@ export function NewsGrid() {
       </div>
 
       {/* Grid */}
-      <AnimatePresence mode="wait">
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 overflow-x-hidden">
-          {currentArticles.map((article, i) => (
-            <NewsCard key={`${article.url}-${page}`} article={article} index={i} />
-          ))}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 overflow-x-hidden">
+        {currentArticles.map((article, i) => (
+          <NewsCard key={article.url} article={article} index={i} />
+        ))}
+      </div>
+
+      {/* Infinite-scroll sentinel + loading indicator */}
+      {hasMore && (
+        <div ref={sentinelRef} className="flex justify-center py-10">
+          <div
+            className={`w-6 h-6 rounded-full border-2 border-t-transparent animate-spin ${isDark ? 'border-slate-600' : 'border-gray-300'}`}
+            aria-label={t.loading}
+          />
         </div>
-      </AnimatePresence>
-
-      {/* Load More */}
-      {canLoadMore && (
-        <div className="flex justify-center mt-12 mb-8">
-          <motion.button
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleLoadMore}
-            className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg hover:shadow-cyan-500/40"
-            style={{ fontFamily: 'Poppins, sans-serif' }}
-          >
-            {t.loadMore}
-          </motion.button>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {showPagination && totalPages > 1 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`flex items-center justify-center gap-3 mt-12 mb-8 p-4 rounded-2xl ${isDark ? 'bg-slate-800/30' : 'bg-gradient-to-r from-slate-50 to-gray-50'}`}
-        >
-          <motion.button
-            onClick={() => handlePageChange(page - 1)}
-            disabled={page === 1}
-            whileHover={page !== 1 ? { scale: 1.05 } : {}}
-            whileTap={page !== 1 ? { scale: 0.95 } : {}}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${page === 1 ? 'opacity-40 cursor-not-allowed' : ''} ${isDark ? 'bg-slate-700/50 text-slate-200 hover:bg-slate-700' : 'bg-white text-gray-700 border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300'}`}
-          >
-            <ChevronLeft size={16} />
-            <span className="hidden sm:inline">{t.previous}</span>
-          </motion.button>
-
-          <div className="flex items-center gap-1.5 px-2">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-              <motion.button
-                key={p}
-                onClick={() => handlePageChange(p)}
-                whileHover={p !== page ? { scale: 1.1 } : {}}
-                whileTap={{ scale: 0.95 }}
-                className={`min-w-9 h-9 rounded-lg text-sm font-semibold transition-all ${p === page ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' : isDark ? 'text-slate-300 hover:bg-slate-700/50' : 'text-gray-600 hover:bg-white border border-gray-200'}`}
-              >
-                {p}
-              </motion.button>
-            ))}
-          </div>
-
-          <motion.button
-            onClick={() => handlePageChange(page + 1)}
-            disabled={page === totalPages}
-            whileHover={page !== totalPages ? { scale: 1.05 } : {}}
-            whileTap={page !== totalPages ? { scale: 0.95 } : {}}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${page === totalPages ? 'opacity-40 cursor-not-allowed' : ''} ${isDark ? 'bg-slate-700/50 text-slate-200 hover:bg-slate-700' : 'bg-white text-gray-700 border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300'}`}
-          >
-            <span className="hidden sm:inline">{t.next}</span>
-            <ChevronRight size={16} />
-          </motion.button>
-        </motion.div>
       )}
     </div>
   );

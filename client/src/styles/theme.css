@@ -1,5 +1,15 @@
 @custom-variant dark (&:is(.dark *));
 
+/* Font utilities (Tailwind v4 registers `font-<name>` from the --font-* namespace).
+   Inter + Poppins are loaded in index.html; `font-sans` (Inter) is the body default.
+   Noto Serif TC (zh-TW) is large, so it is lazy-loaded from the CDN only when the
+   Yahoo TW list view mounts (see YahooSourceView.tsx) — this just registers the class. */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-poppins: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-noto-serif-tc: 'Noto Serif TC', 'Songti TC', 'PMingLiU', serif;
+}
+
 :root {
   --font-size: 16px;
   --background: #ffffff;

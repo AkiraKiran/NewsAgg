@@ -1,29 +1,17 @@
 import { useApp } from '../contexts/AppContext';
 
-interface FooterProps {
-  isVisible?: boolean;
-  onMouseLeave?: () => void;
-}
-
-export function Footer({ isVisible = true, onMouseLeave }: FooterProps) {
+export function Footer() {
   const { isDark } = useApp();
   const currentYear = new Date().getFullYear();
 
   return (
     <footer
-      className="fixed bottom-0 left-0 right-0 border-t transition-all duration-300 ease-out z-30"
-      onMouseLeave={onMouseLeave}
+      className="border-t mt-8"
       style={{
         borderColor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.3)',
         background: isDark
-          ? 'radial-gradient(ellipse at 50% 100%, rgba(6, 182, 212, 0.05) 0%, transparent 50%), rgba(10, 15, 30, 0.95)'
-          : 'radial-gradient(ellipse at 50% 100%, rgba(6, 182, 212, 0.1) 0%, transparent 50%), rgba(240, 250, 251, 0.95)',
-        transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
-        opacity: isVisible ? 1 : 0,
-        pointerEvents: isVisible ? 'auto' : 'none',
-        backdropFilter: 'blur(10px)',
-        maxHeight: '60vh',
-        overflowY: 'auto',
+          ? 'radial-gradient(ellipse at 50% 100%, rgba(6, 182, 212, 0.05) 0%, transparent 50%), rgba(10, 15, 30, 0.6)'
+          : 'radial-gradient(ellipse at 50% 100%, rgba(6, 182, 212, 0.1) 0%, transparent 50%), rgba(240, 250, 251, 0.6)',
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -50,15 +38,16 @@ export function Footer({ isVisible = true, onMouseLeave }: FooterProps) {
             </ul>
           </div>
 
-          {/* Information */}
+          {/* Sources */}
           <div>
             <h4 className="text-sm font-semibold mb-4 uppercase tracking-wide" style={{ color: isDark ? 'rgba(226, 232, 240, 0.9)' : 'rgba(51, 65, 85, 0.9)' }}>
-              Information
+              News Sources
             </h4>
             <ul className="space-y-2 text-sm" style={{ color: isDark ? 'rgba(226, 232, 240, 0.7)' : 'rgba(51, 65, 85, 0.7)' }}>
-              <li><span className="hover:opacity-100 transition-opacity cursor-pointer" style={{ opacity: 0.7 }}></span></li>
-              <li><span className="hover:opacity-100 transition-opacity cursor-pointer" style={{ opacity: 0.7 }}></span></li>
-              <li><span className="hover:opacity-100 transition-opacity cursor-pointer" style={{ opacity: 0.7 }}></span></li>
+              <li><a href="https://www.cnn.com" target="_blank" rel="noopener noreferrer" className="hover:opacity-100 transition-opacity" style={{ opacity: 0.7 }}>CNN</a></li>
+              <li><a href="https://www.bbc.com/news" target="_blank" rel="noopener noreferrer" className="hover:opacity-100 transition-opacity" style={{ opacity: 0.7 }}>BBC News</a></li>
+              <li><a href="https://www.aljazeera.com" target="_blank" rel="noopener noreferrer" className="hover:opacity-100 transition-opacity" style={{ opacity: 0.7 }}>Al Jazeera</a></li>
+              <li><a href="https://tw.news.yahoo.com" target="_blank" rel="noopener noreferrer" className="hover:opacity-100 transition-opacity" style={{ opacity: 0.7 }}>Yahoo News 台灣</a></li>
             </ul>
           </div>
         </div>
@@ -68,9 +57,10 @@ export function Footer({ isVisible = true, onMouseLeave }: FooterProps) {
 
         {/* Bottom Section */}
         <div className="flex flex-col sm:flex-row justify-between items-center text-xs" style={{ color: isDark ? 'rgba(226, 232, 240, 0.6)' : 'rgba(51, 65, 85, 0.6)' }}>
-          <p>{currentYear} NewsAgg</p>
+          <p>© {currentYear} NewsAgg — Transformer-based sentiment analytics.</p>
           <div className="flex gap-6 mt-4 sm:mt-0">
-            <span></span>
+            <span>Built with React · Tailwind · NeonDB</span>
+            <span>Sentiment by RoBERTa</span>
           </div>
         </div>
       </div>
