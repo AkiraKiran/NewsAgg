@@ -2,24 +2,21 @@ import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { query } from '../db/client'
+import { JWT_SECRET } from '../config'
+import { validateBody, registerSchema, loginSchema, googleAuthSchema } from '../middleware/validate'
 
 // Ports server.js /auth routes against the live `users` table
 // (integer id, `password` column). Response shape: { success, token, user, error? }.
 export const authRouter = Router()
-
-const JWT_SECRET = process.env.SECRET_KEY || process.env.JWT_SECRET || 'dev-secret'
 
 function signToken(userId: number | string) {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' } as jwt.SignOptions)
 }
 
 // POST /auth/register
-authRouter.post('/register', async (req: Request, res: Response) => {
+authRouter.post('/register', validateBody(registerSchema), async (req: Request, res: Response) => {
   try {
     const { email, username, password } = req.body
-    if (!email || !username || !password) {
-      return res.json({ success: false, error: 'Missing required fields' })
-    }
 
     const userCheck = await query(
       'SELECT id FROM users WHERE email = $1 OR username = $2',
@@ -49,12 +46,9 @@ authRouter.post('/register', async (req: Request, res: Response) => {
 })
 
 // POST /auth/login
-authRouter.post('/login', async (req: Request, res: Response) => {
+authRouter.post('/login', validateBody(loginSchema), async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body
-    if (!email || !password) {
-      return res.json({ success: false, error: 'Missing email or password' })
-    }
 
     const result = await query(
       'SELECT id, email, username, password FROM users WHERE email = $1',
@@ -83,12 +77,9 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 })
 
 // POST /auth/google
-authRouter.post('/google', async (req: Request, res: Response) => {
+authRouter.post('/google', validateBody(googleAuthSchema), async (req: Request, res: Response) => {
   try {
     const { token } = req.body
-    if (!token) {
-      return res.json({ success: false, error: 'No token provided' })
-    }
 
     const { OAuth2Client } = await import('google-auth-library')
     const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)

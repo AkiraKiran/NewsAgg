@@ -1,7 +1,6 @@
 import { Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.SECRET_KEY || process.env.JWT_SECRET || 'dev-secret'
+import { JWT_SECRET } from '../config'
 
 // Mirrors server.js verifyToken: pulls Bearer token, sets req.userId from
 // the JWT { userId } payload. Error responses use the `error` field so the
