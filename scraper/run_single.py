@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 """Run one source end to end.
 
-    python run_single.py --source cnn
-    python run_single.py --source yahoo_tw --no-db
-    python run_single.py -s bbc --target 25 --json out.json
-
-Sources: cnn | bbc | aljazeera | yahoo_tw
+Takes a required source flag (cnn | bbc | aljazeera | yahoo_tw) plus optional
+no-db (enrich only), target (articles per category) and json (dump path)
+flags — see CLAUDE.md for the runbook.
 """
 from __future__ import annotations
 

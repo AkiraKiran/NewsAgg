@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -16,7 +17,10 @@ from core.cleaner import (
     clean_text,
     date_from_url,
     is_fresh,
+    normalize_canonical,
     source_meta,
+    strip_boilerplate,
+    truncate_content,
     url_id,
 )
 
@@ -31,6 +35,69 @@ class SourceSpec:
     use_playwright: bool = False          # render index + article with Playwright
     skip_zero_shot: bool = False          # trust section->topic mapping (Yahoo)
     target_per_category: int = field(default=config.TARGET_PER_CATEGORY)
+    content_selectors: list[str] = field(default_factory=list)   # CSS selectors tried first for the body
+    boilerplate_extra: list[re.Pattern] = field(default_factory=list)  # site-specific line filters
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Body extraction (trafilatura-first, boilerplate-aware)
+# ═══════════════════════════════════════════════════════════════════
+def _lead_sentences(text: str, limit: int = 220) -> str:
+    """First 1-2 sentences of the clean body — used as the description
+    fallback instead of a blind text[:300] cut. CJK-aware split."""
+    if not text:
+        return ""
+    parts = re.split(r"(?<=[.!?。！？])\s*", text.replace("\n", " "))
+    out = ""
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        if out and len(out) + len(p) + 1 > limit:
+            break
+        out = f"{out} {p}".strip()
+        if len(out) >= limit:
+            break
+    return out or text[:limit]
+
+
+def _extract_body(art, page_html: Optional[str], spec: SourceSpec, soup) -> str:
+    """Best clean body we can get, in order of precision:
+    1. source-specific CSS selectors (e.g. Yahoo TW ``.caas-body``),
+    2. trafilatura on the page HTML (DOM-aware boilerplate removal),
+    3. newspaper3k's text (legacy behavior — concatenates everything).
+    newspaper3k stays the source of title/authors/top_image/publish_date."""
+    np_text = clean_text(art.text or "")
+
+    for sel in spec.content_selectors:
+        try:
+            nodes = soup.select(sel)
+        except Exception:
+            nodes = []
+        if nodes:
+            text = clean_text("\n\n".join(n.get_text("\n", strip=True) for n in nodes))
+            if len(text) >= max(config.MIN_TEXT_LEN, int(len(np_text) * 0.5)):
+                return text
+
+    if page_html:
+        try:
+            import trafilatura
+            t = trafilatura.extract(
+                page_html,
+                favor_precision=True,
+                include_comments=False,
+                include_tables=False,
+            )
+            if t:
+                t = clean_text(t)
+                # Accept unless trafilatura lost a big chunk of the body —
+                # shorter IS expected (that's the boilerplate going away).
+                if len(t) >= int(len(np_text) * 0.6) or len(t) > len(np_text):
+                    return t
+        except Exception as e:                      # noqa: BLE001
+            print(f"     trafilatura failed ({e}); falling back to newspaper3k")
+
+    return np_text
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -63,21 +130,28 @@ def enrich_article(item: dict, spec: SourceSpec) -> Optional[dict]:
             art.parse()
             art.nlp()
 
-        text = clean_text(art.text)
-        if len(text) < config.MIN_TEXT_LEN:
-            print("     too short, skip")
-            return None
-
         pub_dt = art.publish_date
         if not is_fresh(url, pub_dt):
             print("     too old, skip")
             return None
 
-        # Raw soup for meta extraction (reuse rendered html when present).
-        if rendered_html:
-            soup = BeautifulSoup(rendered_html, "html.parser")
+        # Raw soup for body + meta extraction. Reuse the HTML newspaper3k
+        # already downloaded instead of fetching the page a second time.
+        page_html = rendered_html or getattr(art, "html", "") or ""
+        if page_html:
+            soup = BeautifulSoup(page_html, "html.parser")
         else:
             soup = http.fetch_soup(url, timeout=12) or BeautifulSoup("", "html.parser")
+
+        text = _extract_body(art, page_html, spec, soup)
+        text = strip_boilerplate(text, spec.boilerplate_extra)
+        text = truncate_content(text, config.MAX_CONTENT_CHARS)
+        if len(text) < config.MIN_TEXT_LEN:
+            print("     too short, skip")
+            return None
+        if spec.language == "en" and len(text.split()) < config.MIN_WORDS_EN:
+            print("     too few words, skip")
+            return None
 
         jsonld_items = extract.extract_jsonld(soup)
         jsonld = extract.jsonld_article(jsonld_items)
@@ -86,21 +160,25 @@ def enrich_article(item: dict, spec: SourceSpec) -> Optional[dict]:
         related_urls = extract.extract_related(soup, url)
         author_info = extract.extract_author(soup, url, art.authors, jsonld)
 
-        entities = nlp.run_ner(text)
-        sentiment = nlp.analyze_sentiment(text, topic)
-        ai_summary = summarizer.build_ai_summary(text)
-        toxicity = nlp.run_toxicity(text)
-        keywords = nlp.extract_keywords(text, art.keywords or [], entities, top_n=30)
-        readability = nlp.reading_metrics(text)
+        # Language first — sentiment/summary/toxicity are routed by it
+        # (FinBERT/BART/toxic-bert are English-only; XLM-R models handle the rest).
         language = nlp.detect_language(text)
         if spec.language != "en" and (not language or language == "en"):
-            language = spec.language
+            language = spec.language          # trust the spec (e.g. yahoo_tw -> zh-TW)
+
+        entities = nlp.run_ner(text)
+        sentiment = nlp.analyze_sentiment(text, topic, language)
+        ai_summary = summarizer.build_ai_summary(text, language)
+        toxicity = nlp.run_toxicity(text, language)
+        keywords = nlp.extract_keywords(text, art.keywords or [], entities,
+                                        top_n=config.KEYWORDS_TOP_N)
+        readability = nlp.reading_metrics(text)
 
         desc = (
             og_data.get("og_description")
             or jsonld.get("jsonld_description")
             or (art.summary.strip() if art.summary else "")
-            or text[:300] + "..."
+            or _lead_sentences(text)
         )
 
         pub_iso = None
@@ -115,7 +193,7 @@ def enrich_article(item: dict, spec: SourceSpec) -> Optional[dict]:
             or datetime.now(timezone.utc).isoformat()
         )
         mod_iso = og_data.get("modified_meta") or jsonld.get("jsonld_dateModified")
-        canonical = og_data.get("canonical_url") or url
+        canonical = normalize_canonical(og_data.get("canonical_url") or url)
 
         record = {
             "id": url_id(canonical),
@@ -186,8 +264,20 @@ def _assign_topic(candidates: list[dict]) -> list[dict]:
     return candidates
 
 
-def run_source(spec: SourceSpec, *, to_db: bool = True, conn=None) -> list[dict]:
-    """Crawl, filter, enrich and (optionally) upsert one source. Returns records."""
+def run_source(
+    spec: SourceSpec,
+    *,
+    to_db: bool = True,
+    conn=None,
+    global_seen: Optional[set[str]] = None,
+    stats: Optional[dict] = None,
+) -> list[dict]:
+    """Crawl, filter, enrich and (optionally) upsert one source. Returns records.
+
+    ``global_seen`` / ``stats`` let run_all share one dedup set and one
+    inserted/updated/unchanged/errors counter across all sources (the caller
+    preloads existing canonicals once). Standalone calls keep the old behavior.
+    """
     target = spec.target_per_category
     per_src_mult = config.CRAWL_MULT
 
@@ -196,9 +286,12 @@ def run_source(spec: SourceSpec, *, to_db: bool = True, conn=None) -> list[dict]
         conn = db.connect()
         owns_conn = True
 
-    global_seen: set[str] = set()
-    if to_db:
-        global_seen |= db.existing_canonicals(conn)
+    if global_seen is None:
+        global_seen = set()
+        if to_db:
+            global_seen |= db.existing_canonicals(conn)
+    if stats is None:
+        stats = {"inserted": 0, "updated": 0, "unchanged": 0, "errors": 0}
 
     collected: list[dict] = []
     print("=" * 70)
@@ -246,9 +339,11 @@ def run_source(spec: SourceSpec, *, to_db: bool = True, conn=None) -> list[dict]
 
             if to_db:
                 try:
-                    db.insert_article(conn, record)
+                    status = db.insert_article(conn, record)
+                    stats[status] = stats.get(status, 0) + 1
                 except Exception as e:              # noqa: BLE001
                     conn.rollback()
+                    stats["errors"] = stats.get("errors", 0) + 1
                     print(f"     DB insert error: {e}")
             cat_articles.append(record)
 

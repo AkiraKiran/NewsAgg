@@ -70,8 +70,14 @@ def canonical_exists(conn, canonical_url: str) -> bool:
 # ═══════════════════════════════════════════════════════════════════
 # Upsert — preserved from scraper4/5 (writes the live schema)
 # ═══════════════════════════════════════════════════════════════════
-def insert_article(conn, record: dict) -> None:
-    """Upsert one enriched article (+ its source and author). Commits on success."""
+def insert_article(conn, record: dict) -> str:
+    """Upsert one enriched article (+ its source and author). Commits on success.
+
+    Returns 'inserted' | 'updated' | 'unchanged'. The DO UPDATE is guarded by
+    IS DISTINCT FROM so a re-scrape of an unchanged article writes NOTHING —
+    the old unconditional update rewrote content (TOAST) every run, which is
+    what bloated NeonDB with dead tuples + WAL history.
+    """
     import psycopg2.extras as extras
 
     src = record["source"]
@@ -146,6 +152,10 @@ def insert_article(conn, record: dict) -> None:
                 sentiment_polarity = EXCLUDED.sentiment_polarity,
                 keywords           = EXCLUDED.keywords,
                 scraped_at         = EXCLUDED.scraped_at
+            WHERE articles.title       IS DISTINCT FROM EXCLUDED.title
+               OR articles.description IS DISTINCT FROM EXCLUDED.description
+               OR articles.content     IS DISTINCT FROM EXCLUDED.content
+            RETURNING (xmax = 0) AS inserted
             """,
             {
                 "id": record["id"],
@@ -193,7 +203,11 @@ def insert_article(conn, record: dict) -> None:
                 "meta_tags": extras.Json(record.get("meta_tags", [])),
             },
         )
+        row = cur.fetchone()
     conn.commit()
+    if row is None:
+        return "unchanged"           # WHERE guard filtered the update out
+    return "inserted" if row[0] else "updated"
 
 
 def insert_all(dsn_or_conn, articles: list[dict]) -> int:

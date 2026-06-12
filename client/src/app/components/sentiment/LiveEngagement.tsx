@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Users } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
-import { getLiveEngagement } from '../../services/newsAPI';
-import type { LiveEngagementItem, NewsCategoryFilter } from '../../types/article';
+import { buildLiveEngagement } from '../../services/newsAPI';
+import { useLatestArticles } from '../../hooks/useArticles';
 import type { SentimentType } from '../../types/sentiment';
 import { panelBaseClass, chartTextColor, chartMutedColor } from './shared';
 
@@ -22,19 +22,20 @@ const sentimentPillClass: Record<SentimentType, string> = {
 export function LiveEngagement() {
   const { t, isDark, selectedCategory } = useApp();
   const [tick, setTick] = useState(Date.now());
-  const [liveEngagement, setLiveEngagement] = useState<LiveEngagementItem[]>([]);
 
-  const analyticsCategory: NewsCategoryFilter = selectedCategory;
+  // Articles come from the cheap paginated endpoint (React Query cache);
+  // the tick only re-derives the synthetic numbers locally — no refetch.
+  const { data } = useLatestArticles({ limit: 6, category: selectedCategory });
 
-  // Refresh the tick every 12s so the feed re-fetches with fresh "live" numbers.
   useEffect(() => {
     const id = window.setInterval(() => setTick(Date.now()), 12_000);
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    getLiveEngagement(tick, 6, analyticsCategory).then(setLiveEngagement);
-  }, [tick, analyticsCategory]);
+  const liveEngagement = useMemo(
+    () => buildLiveEngagement(data?.articles ?? [], tick, 6),
+    [data, tick]
+  );
 
   const textColor = chartTextColor(isDark);
   const mutedColor = chartMutedColor(isDark);

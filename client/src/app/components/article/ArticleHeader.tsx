@@ -1,5 +1,9 @@
-import { Calendar, Clock3, Globe, Languages, PlayCircle, User } from 'lucide-react';
-import { CATEGORY_BADGE_CLASS, CATEGORY_LABELS, TOPIC_TO_CATEGORY } from '../../constants';
+import { Bookmark, Calendar, Clock3, Globe, Languages, MessageSquareQuote, PlayCircle, User } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { useApp } from '../../contexts/AppContext';
+import { useBookmarks } from '../../hooks/useBookmarks';
+import { CATEGORY_BADGE_CLASS, CATEGORY_LABELS, POSTS_ENABLED, TOPIC_TO_CATEGORY } from '../../constants';
+import { getArticleId } from '../../services/newsAPI';
 import { ImageWithFallback } from '../utils/ImageWithFallback';
 import type { NewsArticle } from '../../types/article';
 import { SENTIMENT_STYLE, bodyTextClass, formatPublishedDate, mutedTextClass } from './helpers';
@@ -10,10 +14,30 @@ interface ArticleHeaderProps {
 }
 
 export function ArticleHeader({ article, isDark }: ArticleHeaderProps) {
+  const { t, isAuthenticated, setSidebarOpen } = useApp();
+  const { isBookmarked: isArticleBookmarked, bookmarkIdFor, add, remove } = useBookmarks();
+  const navigate = useNavigate();
   const mutedText = mutedTextClass(isDark);
   const bodyText = bodyTextClass(isDark);
   const sentimentStyle = SENTIMENT_STYLE[article.sentiment.type];
   const topicBadgeClass = CATEGORY_BADGE_CLASS[TOPIC_TO_CATEGORY[article.topic]];
+
+  const articleId = getArticleId(article);
+  const isBookmarked = isArticleBookmarked(articleId);
+  const isBookmarking = add.isPending || remove.isPending;
+
+  const handleBookmark = () => {
+    if (!isAuthenticated) {
+      setSidebarOpen(true); // sign-in gate, same as NewsCard
+      return;
+    }
+    if (isBookmarked) {
+      const bookmarkId = bookmarkIdFor(articleId);
+      if (bookmarkId) remove.mutate(bookmarkId);
+    } else {
+      add.mutate(article);
+    }
+  };
 
   return (
     <>
@@ -52,6 +76,36 @@ export function ArticleHeader({ article, isDark }: ArticleHeaderProps) {
         <div className="flex items-center gap-1.5"><Globe size={14} className={mutedText} /><span className={bodyText}>{article.source.name}</span></div>
         <div className="flex items-center gap-1.5"><Clock3 size={14} className={mutedText} /><span className={bodyText}>{article.readability.readingTimeMin > 0 ? `${article.readability.readingTimeMin} min read` : 'Quick read'}</span></div>
         {article.language && <div className="flex items-center gap-1.5"><Languages size={14} className={mutedText} /><span className={bodyText}>{article.language.toUpperCase()}</span></div>}
+        <button
+          type="button"
+          onClick={handleBookmark}
+          disabled={isBookmarking}
+          aria-pressed={isBookmarked}
+          className={`ml-auto inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
+            isBookmarked
+              ? 'bg-amber-500 text-white'
+              : isDark
+                ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+          }`}
+        >
+          <Bookmark size={14} fill={isBookmarked ? 'currentColor' : 'none'} />
+          {isBookmarked ? t.bookmarked : t.bookmark}
+        </button>
+        {POSTS_ENABLED && (
+          <button
+            type="button"
+            onClick={() => navigate(`/posts?compose=1&attach=${articleId}`)}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              isDark
+                ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+            }`}
+          >
+            <MessageSquareQuote size={14} />
+            {t.quoteThis}
+          </button>
+        )}
       </div>
     </>
   );

@@ -1,23 +1,40 @@
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, redirect } from 'react-router';
 import { Root } from './pages/Root';
-import { Home } from './pages/Home';
-import { TopHeadlines } from './pages/TopHeadlines';
-import { CountryPage } from './pages/CountryPage';
-import { ArticlePage } from './pages/ArticlePage';
-import { BookmarksPage } from './pages/BookmarksPage';
-import { NotFound } from './pages/NotFound';
 
+// Every page is a router-native lazy route, so the initial bundle ships only
+// the shell; each page's chunk loads on first navigation.
 export const router = createBrowserRouter([
   {
     path: '/',
     Component: Root,
     children: [
-      { index: true, Component: Home },
-      { path: 'top-headlines', Component: TopHeadlines },
-      { path: 'bookmarks', Component: BookmarksPage },
-      { path: 'country/:iso', Component: CountryPage },
-      { path: 'article/:id', Component: ArticlePage },
-      { path: '*', Component: NotFound },
+      { index: true, lazy: async () => ({ Component: (await import('./pages/Home')).Home }) },
+      // Top headlines now live in the Home HeroCarousel; keep stale URLs working.
+      { path: 'top-headlines', loader: () => redirect('/') },
+      {
+        path: 'bookmarks',
+        lazy: async () => ({ Component: (await import('./pages/BookmarksPage')).BookmarksPage }),
+      },
+      {
+        path: 'profile',
+        lazy: async () => ({ Component: (await import('./pages/ProfilePage')).ProfilePage }),
+      },
+      {
+        path: 'posts',
+        lazy: async () => ({ Component: (await import('./pages/PostsPage')).PostsPage }),
+      },
+      {
+        path: 'country/:iso',
+        lazy: async () => ({ Component: (await import('./pages/CountryPage')).CountryPage }),
+      },
+      {
+        // Same full-bleed geometry as Home: the article's own sidebar plays
+        // the right-rail role (content ≤760px, sidebar grows to the edge).
+        path: 'article/:id',
+        handle: { hideRightRail: true },
+        lazy: async () => ({ Component: (await import('./pages/ArticlePage')).ArticlePage }),
+      },
+      { path: '*', lazy: async () => ({ Component: (await import('./pages/NotFound')).NotFound }) },
     ],
   },
 ]);

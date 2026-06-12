@@ -1,19 +1,13 @@
-import { useEffect, useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
-import { getTrendingKeywords } from '../../services/newsAPI';
-import type { NewsCategoryFilter, TrendingKeyword } from '../../types/article';
+import { useTrendingStats } from '../../hooks/useStats';
 import { panelBaseClass, chartTextColor, chartMutedColor } from './shared';
 
 export function TrendingKeywords() {
   const { t, isDark, selectedCategory } = useApp();
-  const [trendingKeywords, setTrendingKeywords] = useState<TrendingKeyword[]>([]);
 
-  const analyticsCategory: NewsCategoryFilter = selectedCategory;
-
-  useEffect(() => {
-    getTrendingKeywords(10, analyticsCategory).then(setTrendingKeywords);
-  }, [analyticsCategory]);
+  // SQL-side keyword frequencies via /api/stats/trending.
+  const { data: trendingKeywords = [] } = useTrendingStats(10, selectedCategory);
 
   const maxKeywordCount = Math.max(1, ...trendingKeywords.map((item) => item.count));
   const textColor = chartTextColor(isDark);

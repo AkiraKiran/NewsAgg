@@ -138,9 +138,19 @@ def _classify(probs: dict) -> tuple:
     return label, round(probs[label], 4), round(pol, 4)
 
 
-def analyze_sentiment(text: str, topic: str) -> dict:
+def resolve_sentiment_key(topic: str, language: str = "en") -> str:
+    """Pick the sentiment model for an article. FinBERT is English-only, so
+    Business articles in any other language route to the multilingual
+    general model (XLM-R) instead."""
+    key = config.SENTIMENT_MODEL_MAP.get(topic, "general")
+    if key == "finance" and not (language or "en").startswith("en"):
+        return "general"
+    return key
+
+
+def analyze_sentiment(text: str, topic: str, language: str = "en") -> dict:
     """Return {type, score, comparative, probabilities, model}."""
-    model_key = config.SENTIMENT_MODEL_MAP.get(topic, "general")
+    model_key = resolve_sentiment_key(topic, language)
     raw = _sentiment_pipe(model_key)(text[:1500])
     probs = _extract_probs(raw)
     label, conf, pol = _classify(probs)
@@ -153,7 +163,9 @@ def analyze_sentiment(text: str, topic: str) -> dict:
             "neutral": round(probs["neutral"], 4),
             "negative": round(probs["negative"], 4),
         },
-        "model": model_key,
+        # Full HF id so articles.sentiment_model is self-documenting
+        # (legacy rows hold the short 'general'/'finance' strings — fine).
+        "model": config.MODELS["sentiment_" + model_key],
     }
 
 
@@ -165,15 +177,21 @@ def run_ner(text: str) -> dict:
         raw = _ner()(text[:1500])
         for ent in raw:
             key = type_map.get(ent["entity_group"])
-            if key and ent["word"] not in entities[key]:
-                entities[key].append(ent["word"])
+            word = (ent.get("word") or "").strip()
+            if key and word and word not in entities[key]:
+                entities[key].append(word)
     except Exception as e:                         # noqa: BLE001
         _log.debug("NER failed: %s", e)
     return entities
 
 
 # ── Toxicity ────────────────────────────────────────────────────────
-def run_toxicity(text: str) -> dict:
+def run_toxicity(text: str, language: str = "en") -> dict:
+    """toxic-bert is English-only: non-EN articles get NULLs instead of
+    garbage scores (a multilingual replacement is ~2.2GB for a low-value
+    signal on news prose — deliberately skipped)."""
+    if not (language or "en").startswith("en"):
+        return {"label": None, "score": None}
     label, score = "non-toxic", 0.0
     try:
         tox = _toxicity()(text[:512])
@@ -222,18 +240,25 @@ def zero_shot_filter(candidates: list[dict], threshold: float = config.ZS_THRESH
 
 
 # ── Keywords / readability / language ───────────────────────────────
-def extract_keywords(text: str, np_kw: list, entities: dict, top_n: int = 30) -> list[str]:
-    sw = stop_words()
+def _keyword_ok(tok: str, sw: set[str]) -> bool:
+    """Keep only meaningful keyword tokens: ≥4 chars, no digits, not a
+    stopword (NLTK + the project's news-prose stoplist)."""
+    return len(tok) > 3 and tok not in sw and not any(c.isdigit() for c in tok)
+
+
+def extract_keywords(text: str, np_kw: list, entities: dict,
+                     top_n: int = config.KEYWORDS_TOP_N) -> list[str]:
+    sw = stop_words() | config.KEYWORD_STOPWORDS
     combined: dict[str, int] = {}
     for kw in np_kw:
         k = kw.lower().strip()
-        if len(k) > 3 and k not in sw:
+        if _keyword_ok(k, sw):
             combined[k] = combined.get(k, 0) + 3
     for elist in entities.values():
         for ent in elist:
             for tok in ent.lower().split():
                 tok = tok.strip(string.punctuation)
-                if len(tok) > 3 and tok not in sw:
+                if _keyword_ok(tok, sw):
                     combined[tok] = combined.get(tok, 0) + 2
     words = re.findall(r"\b[a-zA-Z]{4,}\b", text.lower())
     freq = Counter(w for w in words if w not in sw)

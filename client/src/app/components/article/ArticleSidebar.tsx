@@ -146,6 +146,52 @@ export function ArticleSidebar({
     <div className="space-y-4">
       <ArticleSentimentPanel article={article} isDark={isDark} />
 
+      {/* Category Sentiment Distribution — right under the article's own
+          sentiment so the single-article and category views read together. */}
+      <div className={`rounded-2xl border p-5 ${panelBase}`}>
+        <h3 className={`font-poppins text-sm font-semibold mb-2 ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>
+          Category Sentiment Distribution
+        </h3>
+        <p className={`text-xs mb-4 ${mutedText}`}>{article.topic} articles in current dataset</p>
+
+        <div className="h-[140px] w-full mb-4 flex min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={categorySentimentChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={58} paddingAngle={2} dataKey="value">
+                {categorySentimentChartData.map((item) => (
+                  <Cell key={`article-category-sentiment-${item.type}`} fill={item.color} strokeWidth={0} />
+                ))}
+              </Pie>
+              <Tooltip content={<SentimentTooltip isDark={isDark} total={categorySentimentTotal} />} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="space-y-2.5">
+          {categorySentimentDistribution.map((item) => {
+            const percentage = categorySentimentTotal > 0 ? Math.round((item.count / categorySentimentTotal) * 100) : 0;
+            return (
+              <div key={item.type} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className={`w-16 text-xs ${mutedText}`}>{t[item.type]}</span>
+                  <div className={`h-2 rounded-full overflow-hidden flex-1 ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`}>
+                    <div className={`h-full rounded-full ${SENTIMENT_BAR_STYLE[item.type]}`} style={{ width: `${percentage}%` }} />
+                  </div>
+                  <span className={`text-xs font-semibold ${SENTIMENT_STYLE[item.type].label}`}>
+                    {item.count} ({percentage}%)
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between mt-4 text-xs">
+          <span className={mutedText}>Total in category</span>
+          <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>{categorySentimentTotal}</span>
+        </div>
+      </div>
+
       <div className={`rounded-2xl border p-5 ${panelBase}`}>
         <h3 className={`font-poppins text-sm font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>
           <Sparkles size={14} className="text-cyan-500" />Article Intelligence
@@ -205,51 +251,6 @@ export function ArticleSidebar({
             </div>
           </div>
         )}
-      </div>
-
-      {/* Category Sentiment Distribution */}
-      <div className={`rounded-2xl border p-5 ${panelBase}`}>
-        <h3 className={`font-poppins text-sm font-semibold mb-2 ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>
-          Category Sentiment Distribution
-        </h3>
-        <p className={`text-xs mb-4 ${mutedText}`}>{article.topic} articles in current dataset</p>
-
-        <div className="h-[140px] w-full mb-4 flex min-w-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={categorySentimentChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={58} paddingAngle={2} dataKey="value">
-                {categorySentimentChartData.map((item) => (
-                  <Cell key={`article-category-sentiment-${item.type}`} fill={item.color} strokeWidth={0} />
-                ))}
-              </Pie>
-              <Tooltip content={<SentimentTooltip isDark={isDark} total={categorySentimentTotal} />} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="space-y-2.5">
-          {categorySentimentDistribution.map((item) => {
-            const percentage = categorySentimentTotal > 0 ? Math.round((item.count / categorySentimentTotal) * 100) : 0;
-            return (
-              <div key={item.type} className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className={`w-16 text-xs ${mutedText}`}>{t[item.type]}</span>
-                  <div className={`h-2 rounded-full overflow-hidden flex-1 ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`}>
-                    <div className={`h-full rounded-full ${SENTIMENT_BAR_STYLE[item.type]}`} style={{ width: `${percentage}%` }} />
-                  </div>
-                  <span className={`text-xs font-semibold ${SENTIMENT_STYLE[item.type].label}`}>
-                    {item.count} ({percentage}%)
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center justify-between mt-4 text-xs">
-          <span className={mutedText}>Total in category</span>
-          <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>{categorySentimentTotal}</span>
-        </div>
       </div>
 
       {/* Trending Topics */}

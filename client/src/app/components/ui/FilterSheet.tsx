@@ -88,7 +88,7 @@ export function FilterSheet({ open, onClose }: FilterSheetProps) {
             {t.filters}
           </span>
           {activeCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-indigo-500 text-white text-[11px] font-bold">
+            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-cyan-500 text-white text-[11px] font-bold">
               {activeCount}
             </span>
           )}
@@ -136,7 +136,7 @@ export function FilterSheet({ open, onClose }: FilterSheetProps) {
               onClick={() => setTab(key)}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${
                 active
-                  ? 'bg-indigo-500 text-white'
+                  ? 'bg-cyan-500 text-white'
                   : isDark
                   ? 'text-slate-300 hover:bg-slate-700'
                   : 'text-gray-600 hover:bg-gray-100'
@@ -276,7 +276,7 @@ const TONE_ACTIVE_CLASS: Record<SentimentType, string> = {
 };
 
 function CategoryChip({ label, active, isDark, onClick, tone }: CategoryChipProps) {
-  const activeClass = tone ? TONE_ACTIVE_CLASS[tone] : 'bg-indigo-500 text-white';
+  const activeClass = tone ? TONE_ACTIVE_CLASS[tone] : 'bg-cyan-500 text-white';
   return (
     <button
       onClick={onClick}
@@ -307,7 +307,7 @@ function SourceRow({ name, logo, selected, isDark, onClick }: SourceRowProps) {
       onClick={onClick}
       className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left transition-colors ${
         selected
-          ? 'bg-indigo-500/10 ring-1 ring-indigo-500/40'
+          ? 'bg-cyan-500/10 ring-1 ring-cyan-500/40'
           : isDark
           ? 'hover:bg-slate-700/60'
           : 'hover:bg-gray-100'
@@ -336,7 +336,7 @@ function SourceRow({ name, logo, selected, isDark, onClick }: SourceRowProps) {
       <span
         className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors ${
           selected
-            ? 'bg-indigo-500 border-indigo-500 text-white'
+            ? 'bg-cyan-500 border-cyan-500 text-white'
             : isDark
             ? 'border-slate-600'
             : 'border-gray-300'

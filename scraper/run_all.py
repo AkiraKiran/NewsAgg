@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 """Run every source sequentially against the live DB.
 
-    python run_all.py
-    python run_all.py --no-db --target 10
-
-Used by .github/workflows/scraper.yml on a schedule. One source failing never
-aborts the rest — each is wrapped in try/except.
+Supports --no-db (enrich only, no writes) and --target N (articles per
+category per source). Used by .github/workflows/scraper.yml on a schedule.
+One source failing never aborts the rest — each is wrapped in try/except.
 """
 from __future__ import annotations
 
@@ -36,11 +34,20 @@ def main() -> None:
     conn = db.connect() if to_db else None
     all_records: list[dict] = []
 
+    # One shared dedup set + one stats counter for the whole run: existing
+    # canonicals are preloaded ONCE (one DB roundtrip instead of one per
+    # source) and sources can't re-enrich each other's articles.
+    global_seen: set[str] = set()
+    if conn is not None:
+        global_seen |= db.existing_canonicals(conn)
+    stats = {"inserted": 0, "updated": 0, "unchanged": 0, "errors": 0}
+
     for spec in all_specs():
         if args.target is not None:
             spec.target_per_category = args.target
         try:
-            all_records += run_source(spec, to_db=to_db, conn=conn)
+            all_records += run_source(spec, to_db=to_db, conn=conn,
+                                      global_seen=global_seen, stats=stats)
         except Exception as e:                      # noqa: BLE001
             print(f"!! source {spec.key} failed: {e}")
 
@@ -57,6 +64,10 @@ def main() -> None:
     print("By source:", dict(by_src))
     print("By topic :", dict(by_topic))
     print("By tone  :", dict(by_sent))
+    if to_db:
+        print("DB       :", " | ".join(f"{k}={v}" for k, v in stats.items()))
+        if stats["unchanged"] and not stats["inserted"] and not stats["updated"]:
+            print("           (all unchanged — upsert guard is doing its job, zero bloat)")
 
 
 if __name__ == "__main__":

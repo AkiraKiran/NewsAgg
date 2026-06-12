@@ -1,3 +1,7 @@
+/** Feature flag: the posts/quotes social feed (F7). Backend + UI landed —
+ * composer, /posts page, nav tabs and the interleaved Pulse rail are live. */
+export const POSTS_ENABLED = true;
+
 export const CATEGORIES = [
   'sport',
   'health',
@@ -125,3 +129,12 @@ export const COUNTRIES = [
   { code: 'in', name: 'India' },
   { code: 'br', name: 'Brazil' },
 ] as const;
+
+/** Country page → source ids served from that country. Codes without an entry
+ * have no scraped source yet and render an empty state. */
+export const COUNTRY_SOURCE_MAP: Record<string, string[]> = {
+  us: ['cnn'],
+  gb: ['bbc'],
+  qa: ['aljazeera'],
+  tw: ['yahoo_tw'],
+};

@@ -21,6 +21,11 @@ export function ScrollToTop() {
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
+  // Article pages have the floating "Ask AI" button at the bottom-right
+  // corner; stack above it there. Elsewhere only the mobile tab bar matters.
+  const isArticle = pathname.startsWith('/article/');
+  const offset = isArticle ? 'bottom-36 md:bottom-24' : 'bottom-20 md:bottom-6';
+
   return (
     <AnimatePresence>
       {show && (
@@ -31,7 +36,7 @@ export function ScrollToTop() {
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={scrollToTop}
-          className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30 flex items-center justify-center hover:shadow-xl hover:shadow-cyan-500/40 transition-shadow"
+          className={`fixed ${offset} right-6 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-pink-500 text-white shadow-lg shadow-cyan-500/30 flex items-center justify-center hover:shadow-xl hover:shadow-cyan-500/40 transition-shadow`}
           aria-label="Scroll to top"
         >
           <ArrowUp size={20} />

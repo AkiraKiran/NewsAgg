@@ -7,8 +7,14 @@
  * additive and safe to consume directly via var(...).
  */
 :root {
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
+  /* Brand identity (cyan → pink). Deliberately NOT named --accent: theme.css
+     (imported after this file) owns --accent for the shadcn ui/ components,
+     so an --accent here would always be shadowed. */
+  --brand: #06b6d4;        /* cyan-500 */
+  --brand-2: #ec4899;      /* pink-500 */
+  --brand-hover: #0891b2;  /* cyan-600 */
+  --brand-grad: linear-gradient(90deg, #06b6d4 0%, #ec4899 100%);
+  --brand-ring: rgba(6, 182, 212, 0.5);
   --positive: #10b981;
   --neutral: #f59e0b;
   --negative: #f43f5e;

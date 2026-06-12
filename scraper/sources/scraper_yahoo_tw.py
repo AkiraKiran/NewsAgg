@@ -13,17 +13,29 @@ consistent, Chinese sections are mapped onto that existing vocabulary:
     娛樂 Entertainment | 社會 World | 國際 World
 
 NOTE: Yahoo TW section paths change periodically — verify these URLs if a
-section returns no candidates. Requires: pip install playwright && playwright
-install chromium.
+section returns no candidates. Requires the playwright package with the
+Chromium browser installed.
 """
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.pipeline import SourceSpec, run_source  # noqa: E402
+
+# Yahoo TW-specific boilerplate lines (on top of the multilingual core set in
+# core/cleaner.py): promo boxes ◤...◢, 👉 call-to-action links, Yahoo house ads.
+_YAHOO_BOILERPLATE = [
+    re.compile(r"^◤.*◢$"),
+    re.compile(r"^👉.*"),
+    re.compile(r"^【更多.{0,24}】.*"),
+    re.compile(r"^Yahoo奇摩.*"),
+    re.compile(r"^最夯影音.*"),
+    re.compile(r"^今日推薦影音$"),
+]
 
 # Chinese section -> (live Title-case topic, index URL). Kept here for clarity;
 # folded into the EN-topic-keyed `categories` dict below.
@@ -52,6 +64,8 @@ SPEC = SourceSpec(
     categories=_build_categories(),
     use_playwright=True,
     skip_zero_shot=True,
+    content_selectors=[".caas-body"],     # Yahoo's article body container
+    boilerplate_extra=_YAHOO_BOILERPLATE,
 )
 
 if __name__ == "__main__":

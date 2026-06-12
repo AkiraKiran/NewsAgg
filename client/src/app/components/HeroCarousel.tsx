@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Clock3, TrendingUp } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { TOPIC_BADGE_CLASS } from '../constants';
-import { getArticleId, newsAPI } from '../services/newsAPI';
-import type { NewsArticle } from '../types/article';
+import { getArticleId } from '../services/newsAPI';
+import { useRankedHeadlines } from '../hooks/useArticles';
 import type { SentimentType } from '../types/sentiment';
 
 interface SentimentBadgeProps {
@@ -25,31 +25,26 @@ function SentimentBadge({ sentiment }: SentimentBadgeProps) {
   );
 }
 
+/** Responsive hero height: fits a 360px phone, reads well in the 760px column. */
+const HERO_HEIGHT = 'h-[300px] sm:h-[360px] md:h-[420px]';
+
 export function HeroCarousel() {
-  const { t, isDark } = useApp();
+  const { t, isDark, selectedCategory, selectedSources, selectedSentiment } = useApp();
   const [current, setCurrent] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
-  const [headlines, setHeadlines] = useState<NewsArticle[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const heroHeight = 500;
+  // Importance-ranked headlines over the SAME filter set as the feed:
+  // 'all' blends every category; any active filter narrows the carousel too.
+  const { data, isLoading } = useRankedHeadlines({
+    limit: 10,
+    category: selectedCategory,
+    sources: selectedSources,
+    sentiment: selectedSentiment,
+  });
+  const headlines = data?.articles ?? [];
 
-  useEffect(() => {
-    const fetchHeadlines = async () => {
-      try {
-        const response = await newsAPI.getTopHeadlines('all', 10);
-        if (response.success && response.data?.articles) {
-          setHeadlines(response.data.articles.slice(0, 10));
-        }
-      } catch (err) {
-        console.error('Failed to fetch headlines:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchHeadlines();
-  }, []);
+  // Restart from the first slide whenever the filtered set changes.
+  useEffect(() => setCurrent(0), [data]);
 
   useEffect(() => {
     if (isHovered || headlines.length === 0) return;
@@ -70,26 +65,30 @@ export function HeroCarousel() {
     return date.toLocaleDateString();
   };
 
-  if (loading || headlines.length === 0) {
+  if (isLoading) {
     return (
-      <div style={{ height: `${heroHeight}px` }} className={`rounded-2xl transition-all duration-300 flex items-center justify-center overflow-hidden ${isDark ? 'bg-slate-800/40 border-slate-700/50' : 'bg-gray-50/60 border-white/60'} border backdrop-blur-md`}>
+      <div className={`${HERO_HEIGHT} rounded-2xl transition-all duration-300 flex items-center justify-center overflow-hidden ${isDark ? 'bg-slate-800/40 border-slate-700/50' : 'bg-gray-50/60 border-white/60'} border backdrop-blur-md`}>
         <div className="text-center text-gray-500">
           <div className="text-3xl mb-2">⏳</div>
-          <p className="text-sm">Loading headlines...</p>
+          <p className="text-sm">{t.loading}</p>
         </div>
       </div>
     );
   }
 
-  const article = headlines[current];
+  // Loaded but no match for the active filters — the feed's own empty state covers it.
+  if (headlines.length === 0) return null;
+
+  // Clamp: a filter change can shrink the list before the reset effect runs.
+  const idx = current % headlines.length;
+  const article = headlines[idx];
   const preview = article.aiSummary || article.description || 'No summary available';
   const topicClass = TOPIC_BADGE_CLASS[article.topic];
 
   return (
     <div
-      className="relative overflow-hidden transition-all duration-300 ease-out rounded-2xl border shadow-lg"
+      className={`${HERO_HEIGHT} relative overflow-hidden transition-all duration-300 ease-out rounded-2xl border shadow-lg`}
       style={{
-        height: `${heroHeight}px`,
         overflowAnchor: 'none',
         borderColor: isDark ? 'rgba(51, 65, 85, 0.5)' : 'rgba(255, 255, 255, 0.6)',
         backgroundColor: isDark ? 'rgba(15, 23, 42, 0.4)' : 'rgba(255, 255, 255, 0.4)',
@@ -101,7 +100,7 @@ export function HeroCarousel() {
       {/* Background images */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={current}
+          key={idx}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -120,7 +119,7 @@ export function HeroCarousel() {
 
       {/* Trending badge */}
       <div className="absolute top-3 left-4 flex items-center gap-2 z-10">
-        <div className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider shadow-lg">
+        <div className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-500 to-pink-500 text-white px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider shadow-lg">
           <TrendingUp size={10} />
           {t.topHeadlines}
         </div>
@@ -129,7 +128,7 @@ export function HeroCarousel() {
       {/* Content */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={`content-${current}`}
+          key={`content-${idx}`}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
@@ -180,7 +179,7 @@ export function HeroCarousel() {
           <button
             key={i}
             onClick={() => setCurrent(i)}
-            className={`transition-all duration-300 rounded-full ${i === current ? 'w-5 h-1.5 bg-cyan-400' : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/70'}`}
+            className={`transition-all duration-300 rounded-full ${i === idx ? 'w-5 h-1.5 bg-cyan-400' : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/70'}`}
           />
         ))}
       </div>
@@ -188,11 +187,11 @@ export function HeroCarousel() {
       {/* Progress bar */}
       <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/15 z-10 rounded-b-2xl overflow-hidden">
         <motion.div
-          key={current}
+          key={idx}
           initial={{ width: '0%' }}
           animate={{ width: '100%' }}
           transition={{ duration: 5, ease: 'linear' }}
-          className="h-full bg-gradient-to-r from-cyan-400 to-blue-500"
+          className="h-full bg-gradient-to-r from-cyan-400 to-pink-500"
         />
       </div>
     </div>

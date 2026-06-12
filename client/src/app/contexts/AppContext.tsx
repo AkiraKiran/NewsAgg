@@ -1,13 +1,12 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { Language, translations, Translations } from '../i18n/translations';
 import { Category } from '../constants';
-import { User } from '../services/authService';
-import { Bookmark, bookmarkService } from '../services/bookmarkService';
-import { getRandomQuote } from '../services/newsAPI';
-import type { DailyQuote } from '../types/api';
+import { User, authService } from '../services/authService';
+import { AUTH_UNAUTHORIZED_EVENT } from '../lib/apiFetch';
 import type { SentimentType } from '../types/sentiment';
-import { mem0Service } from '../services/mem0Service';
 
+// UI + identity state only. Server state (articles, bookmarks, quotes,
+// preferences) lives in React Query hooks — see hooks/.
 interface AppContextType {
   // Theme
   isDark: boolean;
@@ -41,16 +40,7 @@ interface AppContextType {
   // Avatar (user-set profile picture, persisted per-account in localStorage)
   avatarUrl: string | null;
   setAvatarUrl: (url: string | null) => void;
-  avatarSrc: string;            // effective src: custom avatar, else generated fallback
-  // Bookmarks
-  bookmarks: Bookmark[];
-  setBookmarks: (bookmarks: Bookmark[]) => void;
-  isBookmarkedById: (articleId: string) => boolean;
-  getBookmarkIdByArticleId: (articleId: string) => number | null;
-  // Daily quote (FavQs via backend)
-  quote: DailyQuote | null;
-  // Personalization (Mem0)
-  preferences: string[];
+  avatarSrc: string; // effective src: custom avatar, else generated fallback
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -68,9 +58,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [user, setUser] = useState<User | null>(null);
   const [avatarUrl, setAvatarUrlState] = useState<string | null>(null);
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
-  const [quote, setQuote] = useState<DailyQuote | null>(null);
-  const [preferences, setPreferences] = useState<string[]>([]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -87,7 +74,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('language', language);
   }, [language]);
 
-  // Load user from localStorage on mount
+  // Load user from localStorage on mount, then validate the token against
+  // /api/account/me — a stale/revoked token signs out via the 401 event, a
+  // valid one refreshes the profile (username/avatar) from the server.
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
@@ -97,25 +86,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error('Error loading user from localStorage:', err);
       }
     }
-  }, []);
-
-  // Load the daily quote once on mount
-  useEffect(() => {
-    getRandomQuote().then((q) => {
-      if (q) setQuote(q);
+    if (!localStorage.getItem('authToken')) return;
+    authService.me().then((res) => {
+      if (res.success && res.user) {
+        setUser(res.user);
+        authService.setUser(res.user);
+      }
     });
   }, []);
 
-  // When the signed-in user changes, refresh their bookmarks + Mem0 preferences
+  // One-time migration: avatars used to live only in this browser's
+  // localStorage; push the local copy to the server once, then drop it.
   useEffect(() => {
-    if (user) {
-      bookmarkService.getBookmarks().then(setBookmarks);
-      mem0Service.getUserPreferences().then(setPreferences);
-    } else {
-      setBookmarks([]);
-      setPreferences([]);
+    if (!user) return;
+    const key = `avatar:${user.email}`;
+    const local = localStorage.getItem(key);
+    if (!local || user.avatar) {
+      if (local && user.avatar) localStorage.removeItem(key);
+      return;
     }
-  }, [user]);
+    authService.updateAvatar(local).then((res) => {
+      if (res.success) {
+        localStorage.removeItem(key);
+        setUser((prev) => (prev ? { ...prev, avatar: res.avatar ?? local } : prev));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email]);
+
+  // Expired/revoked token detected by apiFetch -> drop the in-memory user.
+  useEffect(() => {
+    const onUnauthorized = () => setUser(null);
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
+  }, []);
 
   // Load the saved avatar for whichever account is signed in (keyed by email so
   // switching accounts on the same browser doesn't leak avatars between them).
@@ -131,23 +135,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else localStorage.removeItem(key);
   };
 
-  const toggleTheme = () => setIsDark(prev => !prev);
+  const toggleTheme = () => setIsDark((prev) => !prev);
   const t = translations[language];
   const isAuthenticated = !!user;
+  // Server-stored avatar wins; the localStorage copy only bridges the
+  // one-time migration; dicebear is the generated fallback.
   const avatarSrc =
+    user?.avatar ||
     avatarUrl ||
     `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'NewsAgg2026')}`;
 
-  const isBookmarkedById = (articleId: string) =>
-    bookmarks.some(b => b.article_id === articleId);
-
-  const getBookmarkIdByArticleId = (articleId: string) => {
-    const bookmark = bookmarks.find(b => b.article_id === articleId);
-    return bookmark?.id || null;
-  };
-
-  return (
-    <AppContext.Provider value={{
+  const value = useMemo<AppContextType>(
+    () => ({
       isDark,
       toggleTheme,
       language,
@@ -171,16 +170,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       avatarUrl,
       setAvatarUrl,
       avatarSrc,
-      bookmarks,
-      setBookmarks,
-      isBookmarkedById,
-      getBookmarkIdByArticleId,
-      quote,
-      preferences,
-    }}>
-      {children}
-    </AppContext.Provider>
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      isDark,
+      language,
+      t,
+      translateMode,
+      sidebarOpen,
+      selectedCategory,
+      selectedSources,
+      selectedSentiment,
+      searchQuery,
+      user,
+      isAuthenticated,
+      avatarUrl,
+      avatarSrc,
+    ]
   );
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useApp() {

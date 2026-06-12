@@ -63,6 +63,21 @@ def url_id(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:16]
 
 
+def normalize_canonical(url: str) -> str:
+    """Canonical form used as the dedup key: lowercase host, no query string,
+    no fragment, no trailing slash. Publishers vary tracking params and case
+    on the same story; without this the same article gets a new url_id."""
+    if not url:
+        return url
+    p = urlparse(url)
+    host = (p.netloc or "").lower()
+    path = p.path or ""
+    if len(path) > 1 and path.endswith("/"):
+        path = path.rstrip("/")
+    scheme = p.scheme or "https"
+    return f"{scheme}://{host}{path}"
+
+
 SITE_FAMILIES = [
     {"cnn.com"},
     {"bbc.com", "bbc.co.uk"},
@@ -142,3 +157,99 @@ def clean_text(text: str) -> str:
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+# ── Boilerplate stripping ───────────────────────────────────────────
+# Lines that are pure boilerplate wherever they appear. Anchored per-line
+# (lines are stripped before matching). Multilingual: EN sources + Yahoo TW
+# (zh-TW) + Indonesian syndicated copy.
+BOILERPLATE_FULL_LINE: list[re.Pattern] = [
+    # English
+    re.compile(r"^ADVERTISEMENT$", re.I),
+    re.compile(
+        r"^(Related(\s+(articles|stories|topics|video|content))?:?|Read more:?|Read also:?|"
+        r"MORE ON THIS|Watch:|Watch more|LIVE:|BREAKING:|Sign up (for|to)|Subscribe to|"
+        r"Follow (us|BBC|CNN|Al Jazeera)|Download the .{0,40} app|Editor'?s [Nn]ote:?|"
+        r"This video can ?not be played)\b.*",
+        re.I,
+    ),
+    re.compile(r"^©.*"),
+    re.compile(r"^Copyright .{0,60}$", re.I),
+    re.compile(r"^All rights reserved\.?$", re.I),
+    # zh-TW (Yahoo TW and syndicated Taiwanese outlets)
+    re.compile(r"^廣告$"),
+    re.compile(r"^相關新聞.*"),
+    re.compile(r"^延伸閱讀.*"),
+    re.compile(r"^推薦閱讀.*"),
+    re.compile(r"^更多.{0,12}(報導|新聞|內容).*"),
+    re.compile(r"^看更多.*"),
+    re.compile(r"^原始連結.*"),
+    re.compile(r"^記者.{1,15}／.{0,15}報導$"),
+    re.compile(r"^〔記者.{0,30}〕$"),
+    re.compile(r"^（中央社.{0,30}）$"),
+    re.compile(r"^圖／.*"),
+    re.compile(r"^（圖／.*）$"),
+    # Indonesian
+    re.compile(r"^Baca [Jj]uga:?.*"),
+    re.compile(r"^Simak (juga|video|breaking).*", re.I),
+]
+
+# Patterns that only count as boilerplate on SHORT lines (<90 chars) — photo
+# credits and agency sign-offs are short; real sentences mentioning Reuters
+# in passing are long and must survive.
+BOILERPLATE_SHORT_LINE: list[re.Pattern] = [
+    PHOTO_RE,
+    re.compile(r"^(Image|Photo|Picture) (source|caption|credit)", re.I),
+    re.compile(r"^\(?(Reuters|AP|AFP|Getty Images|EPA|Xinhua|CNA|Antara)\)?\.?$", re.I),
+    re.compile(r"^Source:\s", re.I),
+]
+
+# Trailing paragraphs that are pure follow/newsletter/contact plugs — trimmed
+# only from the END of the article so mid-body sentences are never touched.
+_TAIL_PARA = re.compile(
+    r"^(Follow .{0,80}|Sign up .{0,100}|Subscribe .{0,100}|For more (news|stories|information).{0,80}|"
+    r"Get in touch.{0,80}|Contact us.{0,80}|Listen to .{0,60}podcast.{0,40}|"
+    r"Download .{0,40}app.{0,40}|Have you been affected.{0,80})$",
+    re.I,
+)
+_SHORT_LINE_MAX = 90
+
+
+def strip_boilerplate(text: str, extra: Optional[list[re.Pattern]] = None) -> str:
+    """Remove ad markers, related-link blocks, photo credits and promo tails
+    from extracted body text. ``extra`` lets a SourceSpec add site-specific
+    line patterns (e.g. Yahoo TW promo boxes)."""
+    if not text:
+        return ""
+    full = BOILERPLATE_FULL_LINE + (extra or [])
+    kept: list[str] = []
+    prev_line: Optional[str] = None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line:
+            if any(p.search(line) for p in full):
+                continue
+            if len(line) < _SHORT_LINE_MAX and any(p.search(line) for p in BOILERPLATE_SHORT_LINE):
+                continue
+            if line == prev_line:          # consecutive duplicate (repeated captions)
+                continue
+            prev_line = line
+        kept.append(raw_line)
+
+    cleaned = "\n".join(kept)
+    paras = re.split(r"\n{2,}", cleaned)
+    while paras and (not paras[-1].strip() or _TAIL_PARA.match(paras[-1].strip())):
+        paras.pop()
+    return clean_text("\n\n".join(paras))
+
+
+def truncate_content(text: str, max_chars: int) -> str:
+    """Cap body length at a sentence boundary (incl. CJK 。！？) so stored rows
+    stay lean without ending mid-sentence."""
+    if not text or len(text) <= max_chars:
+        return text
+    cut = text[:max_chars]
+    pos = max(cut.rfind(ch) for ch in ".!?。！？")
+    if pos > max_chars // 2:
+        return cut[: pos + 1].rstrip()
+    return cut.rstrip()

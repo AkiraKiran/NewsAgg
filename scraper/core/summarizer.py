@@ -29,21 +29,28 @@ def _summariser():
         return None
 
 
-def build_ai_summary(text: str) -> Optional[str]:
+def build_ai_summary(text: str, language: str = "en") -> Optional[str]:
+    """BART abstractive teaser for English; extractive first sentences for
+    everything else (BART emits garbage on non-EN, and CJK text has no
+    whitespace words — the old word-count gate silently skipped zh entirely)."""
     chunk = text[:1024]
-    if len(chunk.split()) <= 50:
+    is_en = (language or "en").startswith("en")
+
+    if is_en:
+        if len(chunk.split()) <= 50:
+            return None
+        pipe = _summariser()
+        if pipe is not None:
+            try:
+                out = pipe(chunk, max_length=80, min_length=30, do_sample=False)
+                return out[0]["summary_text"]
+            except Exception:
+                pass
+    elif len(chunk) <= 80:        # CJK gate by characters, not words
         return None
 
-    pipe = _summariser()
-    if pipe is not None:
-        try:
-            out = pipe(chunk, max_length=80, min_length=30, do_sample=False)
-            return out[0]["summary_text"]
-        except Exception:
-            pass
-
-    # Extractive fallback — first 3 sentences, capped.
-    sentences = re.split(r"(?<=[.!?])\s+", chunk.strip())
+    # Extractive fallback — first 3 sentences (CJK-aware split), capped.
+    sentences = [s for s in re.split(r"(?<=[.!?。！？])\s*", chunk.strip()) if s]
     fallback = " ".join(sentences[:3]).strip()
     if len(fallback) > 420:
         fallback = fallback[:420].rsplit(" ", 1)[0] + "..."

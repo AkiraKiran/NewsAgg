@@ -5,6 +5,7 @@ beautifulsoup4
 lxml
 lxml_html_clean
 newspaper3k
+trafilatura          # primary body extractor (DOM-aware boilerplate removal)
 
 # NLP stack (HuggingFace + helpers)
 transformers

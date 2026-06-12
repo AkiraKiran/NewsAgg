@@ -4,10 +4,16 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Activity } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { CATEGORY_BADGE_CLASS, CATEGORIES, CATEGORY_LABELS } from '../../constants';
-import { getSentimentDistribution } from '../../services/newsAPI';
+import { useStatsOverview, type StatsOverview } from '../../hooks/useStats';
 import type { NewsCategoryFilter } from '../../types/article';
 import type { SentimentDistributionItem } from '../../types/sentiment';
 import { panelBaseClass, chartTextColor, chartMutedColor } from './shared';
+
+const toDistribution = (overview: StatsOverview | undefined): SentimentDistributionItem[] =>
+  (['positive', 'neutral', 'negative'] as const).map((type) => ({
+    type,
+    count: overview?.sentiments[type] ?? 0,
+  }));
 
 const SENTIMENT_COLORS = {
   positive: '#10b981',
@@ -35,22 +41,16 @@ const CustomTooltip = ({ active, payload, isDark, total }: any) => {
 export function SentimentChart() {
   const { t, isDark, selectedCategory } = useApp();
   const [sentimentCategoryIndex, setSentimentCategoryIndex] = useState(0);
-  const [overallSentimentDistribution, setOverallSentimentDistribution] = useState<SentimentDistributionItem[]>([]);
-  const [categorySentimentDistribution, setCategorySentimentDistribution] = useState<SentimentDistributionItem[]>([]);
 
   const rotatingSentimentCategory: NewsCategoryFilter = selectedCategory === 'all'
     ? CATEGORIES[sentimentCategoryIndex]
     : selectedCategory;
 
-  // Overall distribution never depends on category — fetch once.
-  useEffect(() => {
-    getSentimentDistribution('all').then(setOverallSentimentDistribution);
-  }, []);
-
-  // Per-category distribution follows the (possibly rotating) category.
-  useEffect(() => {
-    getSentimentDistribution(rotatingSentimentCategory).then(setCategorySentimentDistribution);
-  }, [rotatingSentimentCategory]);
+  // SQL-side aggregates via /api/stats/overview (no full-dataset download).
+  const { data: overallOverview } = useStatsOverview('all');
+  const { data: categoryOverview } = useStatsOverview(rotatingSentimentCategory);
+  const overallSentimentDistribution = toDistribution(overallOverview);
+  const categorySentimentDistribution = toDistribution(categoryOverview);
 
   // Rotation control: auto-cycle when viewing "all", otherwise lock to the selection.
   useEffect(() => {

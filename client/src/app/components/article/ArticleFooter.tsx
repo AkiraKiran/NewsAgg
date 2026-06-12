@@ -47,7 +47,7 @@ export function ArticleFooter({ article, isDark }: ArticleFooterProps) {
           className="flex items-center justify-between w-full text-left"
         >
           <span className={`flex items-center gap-2 font-poppins text-sm font-semibold ${headingText}`}>
-            <Info size={14} className="text-indigo-500" />
+            <Info size={14} className="text-cyan-500" />
             {t.metricsGlossaryTitle}
           </span>
           <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''} ${mutedText}`} />

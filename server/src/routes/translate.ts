@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { query } from '../db/client'
 import { translateArticleFields, SUPPORTED_LANGS, type ApiLang } from '../services/translate'
+import { translateLimiter } from '../middleware/rateLimit'
 
 // GET /api/articles/:id/translate?lang=en|id|zh-CN|zh-TW
 // Cache-first: serves a stored translation if present, otherwise translates
@@ -47,7 +48,7 @@ function normalizeStoredLang(lang: string | null): ApiLang | null {
   return null
 }
 
-translateRouter.get('/:id/translate', async (req: Request, res: Response) => {
+translateRouter.get('/:id/translate', translateLimiter, async (req: Request, res: Response) => {
   const articleId = req.params.id
   const langParam = (req.query.lang as string | undefined)?.trim()
 

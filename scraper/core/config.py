@@ -78,8 +78,32 @@ MAX_AGE_DAYS = 60            # reject articles older than this (None = no limit)
 TARGET_PER_CATEGORY = 50     # articles to keep per category per source
 CRAWL_MULT = 3               # crawl this many times the target, then filter down
 MIN_TEXT_LEN = 300           # minimum article body length (chars)
+MIN_WORDS_EN = 80            # minimum body words for English sources (zh exempt —
+                             # CJK has no spaces, word counts are meaningless there)
+MAX_CONTENT_CHARS = 25_000   # hard cap on stored body (TOAST diet; cut at sentence end)
 ZS_THRESHOLD = 0.38          # zero-shot relevance cutoff
 REQUEST_TIMEOUT = 15
+
+# ── Keywords ────────────────────────────────────────────────────────
+KEYWORDS_TOP_N = 15          # keywords kept per article (storage diet; was 30)
+# Generic news-prose words that survive NLTK stopwords but carry no signal.
+KEYWORD_STOPWORDS = {
+    "said", "says", "saying", "told", "tells", "according", "also", "just",
+    "would", "could", "should", "might", "must", "really", "very",
+    "year", "years", "people", "news", "report", "reports", "reported",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "january", "february", "march", "april", "june", "july", "august",
+    "september", "october", "november", "december",
+    "first", "second", "last", "next", "many", "much", "more", "most",
+    "make", "made", "makes", "take", "took", "taken", "going", "went",
+    "time", "times", "week", "weeks", "month", "months", "today", "yesterday",
+    "still", "since", "while", "where", "which", "their", "there", "these",
+    "those", "after", "before", "about", "around", "between", "through",
+    "advertisement", "getty", "reuters", "images", "image", "photo", "photos",
+    "caption", "credit", "read", "watch", "follow", "subscribe", "newsletter",
+    "click", "share", "story", "stories", "article", "articles", "video",
+    "thing", "things", "something", "another", "other", "others", "being",
+}
 
 # ── Sentiment classification thresholds ─────────────────────────────
 NEUTRAL_THRESHOLD = 0.52
@@ -87,11 +111,15 @@ NEUTRAL_POLARITY_CAP = 0.18
 POLARITY_MARGIN = 0.10
 
 # ── HuggingFace model ids ───────────────────────────────────────────
+# sentiment_general + ner are multilingual (XLM-R) so zh-TW articles are
+# analysed natively. sentiment_finance (FinBERT), summarizer (BART) and
+# toxicity (toxic-bert) are English-only — nlp.py/summarizer.py gate them
+# by language and fall back to the general model / extractive / NULL.
 MODELS = {
-    "sentiment_general": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+    "sentiment_general": "cardiffnlp/twitter-xlm-roberta-base-sentiment",
     "sentiment_finance": "ProsusAI/finbert",
     "zero_shot": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
-    "ner": "dslim/bert-base-NER",
+    "ner": "Davlan/xlm-roberta-base-ner-hrl",
     "summarizer": "facebook/bart-large-cnn",
     "toxicity": "unitary/toxic-bert",
 }

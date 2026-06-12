@@ -9,7 +9,7 @@ interface LanguageSwitcherProps {
   isAutoTranslated?: boolean;
 }
 
-const LANG_PILLS: { code: Language; short: string }[] = [
+export const LANG_PILLS: { code: Language; short: string }[] = [
   { code: 'en', short: 'EN' },
   { code: 'id', short: 'ID' },
   { code: 'zhCN', short: '简中' },
@@ -33,7 +33,7 @@ export function LanguageSwitcher({ isDark, isLoading = false, isAutoTranslated =
               onClick={() => setLanguage(pill.code)}
               className={`px-2.5 py-1 rounded-full text-xs font-semibold font-mono transition-colors ${
                 active
-                  ? 'bg-indigo-500 text-white'
+                  ? 'bg-cyan-500 text-white'
                   : isDark
                   ? 'text-slate-300 hover:bg-slate-700'
                   : 'text-gray-600 hover:bg-gray-100'
@@ -52,7 +52,7 @@ export function LanguageSwitcher({ isDark, isLoading = false, isAutoTranslated =
         aria-pressed={translateMode}
         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
           translateMode
-            ? 'bg-indigo-500 border-indigo-500 text-white'
+            ? 'bg-cyan-500 border-cyan-500 text-white'
             : isDark
             ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
             : 'border-gray-200 text-gray-600 hover:bg-gray-100'
@@ -72,7 +72,7 @@ export function LanguageSwitcher({ isDark, isLoading = false, isAutoTranslated =
 
       {/* Auto-translated badge */}
       {!isLoading && isAutoTranslated && (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-500/10 text-cyan-500 border border-cyan-500/20">
           <Sparkles size={11} />
           {t.autoTranslated}
         </span>
