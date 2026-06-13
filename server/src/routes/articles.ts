@@ -41,6 +41,9 @@ articlesRouter.get('/:id', async (req: Request, res: Response) => {
     })
 
     if (!article) {
+      // Don't negative-cache: an article the scraper inserts seconds from now
+      // should be servable immediately, not 404 for the rest of the TTL.
+      articleCache.delete(id)
       return res.status(404).json({ success: false, message: 'Article not found' })
     }
     return res.json({ success: true, data: article })

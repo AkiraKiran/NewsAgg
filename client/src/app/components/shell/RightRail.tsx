@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { SearchBox } from './SearchBox';
+import { FooterCompact } from './Footer';
 
 // Lazy per tab: Insights pulls recharts (~300kB) — it must not ride in the
 // main bundle just because the shell renders on every page.
@@ -79,9 +80,7 @@ export function RightRail() {
           </Suspense>
         </div>
 
-        <p className={`text-[11px] leading-snug ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
-          © {new Date().getFullYear()} NewsAgg · CNN · BBC · Al Jazeera · Yahoo TW
-        </p>
+        <FooterCompact />
       </div>
     </aside>
   );

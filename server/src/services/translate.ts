@@ -6,7 +6,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 // CLAUDE.md specifies Gemini 2.0 Flash. (gemini-1.5-flash 404s on this key's
 // API version — it's been retired; 2.0-flash is the current free-tier model.)
-const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' })
+// 20s request timeout: a hung Gemini call must fall through to Lingva, not
+// hold the translate request open indefinitely.
+const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' }, { timeout: 20_000 })
 
 export type ApiLang = 'en' | 'id' | 'zh-CN' | 'zh-TW'
 export const SUPPORTED_LANGS: ApiLang[] = ['en', 'id', 'zh-CN', 'zh-TW']
@@ -91,7 +93,8 @@ ${JSON.stringify(payload)}`
 async function lingvaField(text: string, target: string): Promise<string | null> {
   // 'auto' source lets Lingva detect the article's language.
   const url = `https://lingva.ml/api/v1/auto/${target}/${encodeURIComponent(text)}`
-  const res = await fetch(url)
+  // Timeout: a hung upstream must fail the request, not hold it open forever.
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (!res.ok) throw new Error(`Lingva HTTP ${res.status}`)
   const data = (await res.json()) as { translation?: string }
   return hasText(data.translation) ? (data.translation as string) : null
@@ -103,18 +106,29 @@ async function translateWithLingva(
 ): Promise<TranslatableFields> {
   const target = LINGVA_CODE[targetLang]
   const out: TranslatableFields = { title: null, description: null, content: null, aiSummary: null }
+  let attempted = 0
+  let translated = 0
   for (const key of FIELD_KEYS) {
     const original = fields[key]
     if (!hasText(original)) {
       out[key] = original
       continue
     }
+    attempted++
     try {
-      out[key] = (await lingvaField(original, target)) ?? original
+      const result = await lingvaField(original, target)
+      if (result !== null) translated++
+      out[key] = result ?? original
     } catch {
       // One field failing must not drop the rest — keep the original.
       out[key] = original
     }
+  }
+  // Nothing actually translated → fail loudly so the caller reports
+  // provider 'none' and the route does NOT cache the originals as a
+  // translation (which would poison the translations table permanently).
+  if (attempted > 0 && translated === 0) {
+    throw new Error('Lingva translated no fields')
   }
   return out
 }

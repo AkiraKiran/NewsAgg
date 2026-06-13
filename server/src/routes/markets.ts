@@ -55,8 +55,15 @@ interface FxRates {
   updatedAt: string | null
 }
 
+// Every upstream fetch gets a hard timeout. Without one, a hung socket never
+// settles the loader promise, and the single-flight `inflight` entry for that
+// section would never clear — poisoning the endpoint until a process restart.
+const FETCH_TIMEOUT_MS = 8_000
+const fetchWithTimeout = (url: string) =>
+  fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+
 async function loadFx(): Promise<FxRates> {
-  const res = await fetch('https://open.er-api.com/v6/latest/USD')
+  const res = await fetchWithTimeout('https://open.er-api.com/v6/latest/USD')
   if (!res.ok) throw new Error(`er-api HTTP ${res.status}`)
   const json: any = await res.json()
   if (json?.result !== 'success' || !json.rates) throw new Error('er-api bad payload')
@@ -91,32 +98,40 @@ function stooqDate(d: Date): string {
 async function loadIndices(): Promise<IndexQuote[]> {
   const d2 = new Date()
   const d1 = new Date(d2.getTime() - 21 * 24 * 60 * 60 * 1000) // ≥14 trading days
-  const out: IndexQuote[] = []
-  for (const { symbol, name } of INDICES) {
-    const url =
-      `https://stooq.com/q/d/l/?s=${encodeURIComponent(symbol)}` +
-      `&d1=${stooqDate(d1)}&d2=${stooqDate(d2)}&i=d`
-    const res = await fetch(url)
-    if (!res.ok) continue
-    const csv = await res.text()
-    // Header: Date,Open,High,Low,Close,Volume — Stooq answers "N/D" on block.
-    const closes = csv
-      .trim()
-      .split('\n')
-      .slice(1)
-      .map((line) => Number(line.split(',')[4]))
-      .filter((n) => Number.isFinite(n))
-    if (closes.length < 2) continue
-    const close = closes[closes.length - 1]
-    const prev = closes[closes.length - 2]
-    out.push({
-      symbol,
-      name,
-      close,
-      changePct: prev ? ((close - prev) / prev) * 100 : null,
-      spark: closes.slice(-14),
+  // The three symbols are independent — fetch them in parallel so the cold
+  // path pays one Stooq round-trip, not three in series.
+  const results = await Promise.all(
+    INDICES.map(async ({ symbol, name }): Promise<IndexQuote | null> => {
+      try {
+        const url =
+          `https://stooq.com/q/d/l/?s=${encodeURIComponent(symbol)}` +
+          `&d1=${stooqDate(d1)}&d2=${stooqDate(d2)}&i=d`
+        const res = await fetchWithTimeout(url)
+        if (!res.ok) return null
+        const csv = await res.text()
+        // Header: Date,Open,High,Low,Close,Volume — Stooq answers "N/D" on block.
+        const closes = csv
+          .trim()
+          .split('\n')
+          .slice(1)
+          .map((line) => Number(line.split(',')[4]))
+          .filter((n) => Number.isFinite(n))
+        if (closes.length < 2) return null
+        const close = closes[closes.length - 1]
+        const prev = closes[closes.length - 2]
+        return {
+          symbol,
+          name,
+          close,
+          changePct: prev ? ((close - prev) / prev) * 100 : null,
+          spark: closes.slice(-14),
+        }
+      } catch {
+        return null // one symbol failing must not sink the others
+      }
     })
-  }
+  )
+  const out = results.filter((q): q is IndexQuote => q !== null)
   if (out.length === 0) throw new Error('stooq returned no parsable data')
   return out
 }
@@ -134,7 +149,7 @@ async function loadCrypto(): Promise<CryptoQuote[]> {
   const url =
     'https://api.coingecko.com/api/v3/coins/markets' +
     '?vs_currency=usd&ids=bitcoin,ethereum&sparkline=true&price_change_percentage=24h'
-  const res = await fetch(url)
+  const res = await fetchWithTimeout(url)
   if (!res.ok) throw new Error(`coingecko HTTP ${res.status}`)
   const json: any = await res.json()
   if (!Array.isArray(json)) throw new Error('coingecko bad payload')

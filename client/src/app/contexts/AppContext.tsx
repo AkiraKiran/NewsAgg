@@ -87,12 +87,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
     if (!localStorage.getItem('authToken')) return;
-    authService.me().then((res) => {
-      if (res.success && res.user) {
-        setUser(res.user);
-        authService.setUser(res.user);
-      }
-    });
+    authService.me()
+      .then((res) => {
+        if (res.success && res.user) {
+          setUser(res.user);
+          authService.setUser(res.user);
+        }
+      })
+      // accountFetch resolves {success:false} on its own failures; this catch
+      // is defense-in-depth so boot-time validation can never reject unhandled.
+      .catch(() => {});
   }, []);
 
   // One-time migration: avatars used to live only in this browser's

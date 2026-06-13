@@ -49,6 +49,15 @@ const asString = (value: unknown): string | null => {
 const asNumber = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
+// Parses DB numerics that may arrive as strings. null/undefined/'' are
+// "missing" — NOT 0: `Number(null)` is 0 and `0 || fallback` takes the
+// fallback, the classic falsy-zero traps this helper exists to avoid.
+const numOrNull = (value: unknown): number | null => {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
 const asBoolean = (value: unknown): boolean | null =>
   typeof value === 'boolean' ? value : null;
 
@@ -200,12 +209,24 @@ const normalizeOpenGraph = (value: unknown): NewsOpenGraph => {
   };
 };
 
+// Topics outside the 8 known categories are dropped (the type system and
+// badge maps only cover those 8) — but loudly, once per unknown value, so a
+// scraper topic change is visible instead of silently shrinking the feed.
+const warnedTopics = new Set<string>();
+
 const normalizeArticle = (article: unknown): NewsArticle | null => {
   const raw = asRecord(article);
 
   // 1. 处理 Topic
   const topic = normalizeTopic(raw.topic);
-  if (!topic) return null;
+  if (!topic) {
+    const rawTopic = asString(raw.topic) ?? '(empty)';
+    if (!warnedTopics.has(rawTopic)) {
+      warnedTopics.add(rawTopic);
+      console.warn(`[newsAPI] dropping article(s) with unknown topic "${rawTopic}"`);
+    }
+    return null;
+  }
 
   // 2. 核心修正：处理扁平化的 Source (如果 raw.source 不存在，就从 source_id 等拼接)
   const sourceInput = raw.source || {
@@ -223,9 +244,10 @@ const normalizeArticle = (article: unknown): NewsArticle | null => {
     score: Number(raw.sentiment_score) || 0,
     comparative: Number(raw.sentiment_polarity) || 0,
     probabilities: {
-      positive: Number(raw.sentiment_pos) || (raw.sentiment_type === 'positive' ? 1 : 0),
-      neutral: Number(raw.sentiment_neu) || (raw.sentiment_type === 'neutral' ? 1 : 0),
-      negative: Number(raw.sentiment_neg) || (raw.sentiment_type === 'negative' ? 1 : 0),
+      // A stored 0 is a real probability — only fall back when truly missing.
+      positive: numOrNull(raw.sentiment_pos) ?? (raw.sentiment_type === 'positive' ? 1 : 0),
+      neutral: numOrNull(raw.sentiment_neu) ?? (raw.sentiment_type === 'neutral' ? 1 : 0),
+      negative: numOrNull(raw.sentiment_neg) ?? (raw.sentiment_type === 'negative' ? 1 : 0),
     },
     model: raw.sentiment_model || 'general'
   };
@@ -282,7 +304,13 @@ const normalizeArticle = (article: unknown): NewsArticle | null => {
     entities: normalizeEntities(raw.entities || {}),
     relatedUrls: asStringArray(raw.related_urls ?? raw.relatedUrls ?? []),
 
-    aiConfidence: (raw.ai_confidence ?? raw.ai_relevance) ? Number(raw.ai_confidence ?? raw.ai_relevance) : (pickNumber(raw.aiConfidence, raw.aiRelevance) ?? undefined),
+    // numOrNull keeps a legitimate 0 relevance (the old truthiness check
+    // turned 0 into "no data").
+    aiConfidence:
+      numOrNull(raw.ai_confidence) ??
+      numOrNull(raw.ai_relevance) ??
+      pickNumber(raw.aiConfidence, raw.aiRelevance) ??
+      undefined,
     aiTopLabel: pickString(raw.ai_top_label, raw.aiTopLabel),
     aiLabelScores: asNumberRecord(raw.ai_label_scores ?? raw.aiLabelScores ?? {}),
 

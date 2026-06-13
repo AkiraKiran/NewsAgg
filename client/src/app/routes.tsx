@@ -8,7 +8,13 @@ export const router = createBrowserRouter([
     path: '/',
     Component: Root,
     children: [
-      { index: true, lazy: async () => ({ Component: (await import('./pages/Home')).Home }) },
+      {
+        index: true,
+        // Infinite feed — a bottom-of-page footer is unreachable here; the
+        // sticky right rail's FooterCompact serves as the footer instead.
+        handle: { hideFooter: true },
+        lazy: async () => ({ Component: (await import('./pages/Home')).Home }),
+      },
       // Top headlines now live in the Home HeroCarousel; keep stale URLs working.
       { path: 'top-headlines', loader: () => redirect('/') },
       {
@@ -21,6 +27,8 @@ export const router = createBrowserRouter([
       },
       {
         path: 'posts',
+        // Infinite feed — same reasoning as Home.
+        handle: { hideFooter: true },
         lazy: async () => ({ Component: (await import('./pages/PostsPage')).PostsPage }),
       },
       {

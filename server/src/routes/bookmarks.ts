@@ -1,19 +1,18 @@
 import { Router, Response } from 'express'
 import { query } from '../db/client'
 import { authMiddleware } from '../middleware/auth'
+import { validateBody, bookmarkSchema } from '../middleware/validate'
 
 // Ports server.js /bookmarks routes against the live `bookmarks` table
 // (integer id/user_id, flat article_* columns). All routes require a token.
+// Error responses use static messages — raw DB errors stay in the server log.
 export const bookmarksRouter = Router()
 bookmarksRouter.use(authMiddleware)
 
 // POST /bookmarks
-bookmarksRouter.post('/', async (req: any, res: Response) => {
+bookmarksRouter.post('/', validateBody(bookmarkSchema), async (req: any, res: Response) => {
   try {
     const { articleId, articleTitle, articleUrl, urlToImage, sourceName, topic } = req.body
-    if (!articleId || !articleUrl) {
-      return res.json({ success: false, error: 'Missing required fields' })
-    }
 
     const result = await query(
       `INSERT INTO bookmarks (user_id, article_id, article_title, article_url, url_to_image, source_name, topic)
@@ -28,7 +27,7 @@ bookmarksRouter.post('/', async (req: any, res: Response) => {
       return res.json({ success: false, error: 'Article already bookmarked' })
     }
     console.error('Bookmark add error:', error)
-    res.json({ success: false, error: error.message })
+    res.json({ success: false, error: 'Failed to add bookmark' })
   }
 })
 
@@ -42,7 +41,7 @@ bookmarksRouter.get('/', async (req: any, res: Response) => {
     res.json({ success: true, data: result.rows })
   } catch (error: any) {
     console.error('Bookmarks fetch error:', error)
-    res.json({ success: false, error: error.message })
+    res.json({ success: false, error: 'Failed to load bookmarks' })
   }
 })
 
@@ -60,7 +59,7 @@ bookmarksRouter.get('/check/:articleId', async (req: any, res: Response) => {
     })
   } catch (error: any) {
     console.error('Bookmark check error:', error)
-    res.json({ success: false, error: error.message })
+    res.json({ success: false, error: 'Failed to check bookmark' })
   }
 })
 
@@ -77,6 +76,6 @@ bookmarksRouter.delete('/:bookmarkId', async (req: any, res: Response) => {
     res.json({ success: true })
   } catch (error: any) {
     console.error('Bookmark delete error:', error)
-    res.json({ success: false, error: error.message })
+    res.json({ success: false, error: 'Failed to delete bookmark' })
   }
 })

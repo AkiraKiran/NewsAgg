@@ -40,8 +40,13 @@ authRouter.post('/register', validateBody(registerSchema), async (req: Request, 
       user: { id: user.id, username: user.username, email: user.email, avatar: user.avatar }
     })
   } catch (error: any) {
+    // 23505 = unique violation: closes the check-then-insert race when two
+    // registers with the same email/username land concurrently.
+    if (error?.code === '23505') {
+      return res.json({ success: false, error: 'Email or username already exists' })
+    }
     console.error('Register error:', error)
-    res.json({ success: false, error: error.message })
+    res.json({ success: false, error: 'Registration failed' })
   }
 })
 
@@ -76,7 +81,7 @@ authRouter.post('/login', validateBody(loginSchema), async (req: Request, res: R
     })
   } catch (error: any) {
     console.error('Login error:', error)
-    res.json({ success: false, error: error.message })
+    res.json({ success: false, error: 'Login failed' })
   }
 })
 
@@ -98,7 +103,16 @@ authRouter.post('/google', validateBody(googleAuthSchema), async (req: Request, 
     }
 
     const email = payload.email
-    const username = payload.name || (email ? email.split('@')[0] : 'user')
+    // Accounts are matched/created by email, so the email must be verified —
+    // an unverified-email Google identity could otherwise claim an existing
+    // account (Google sets email_verified:false on some Workspace/imported
+    // accounts; for normal Gmail it is always true).
+    if (!email || payload.email_verified !== true) {
+      return res
+        .status(401)
+        .json({ success: false, error: 'Google account email is missing or unverified' })
+    }
+    const username = payload.name || email.split('@')[0]
 
     const userResult = await query(
       'SELECT id, email, username, avatar FROM users WHERE email = $1',
@@ -109,10 +123,8 @@ authRouter.post('/google', validateBody(googleAuthSchema), async (req: Request, 
       // First Google sign-in: create the account on the spot, passwordless.
       // Email/password login and change-password already answer such accounts
       // with a clear "signs in with Google" message. The username comes from
-      // the Google profile name with a unique-suffix fallback.
-      if (!email) {
-        return res.status(401).json({ success: false, error: 'Google account has no email' })
-      }
+      // the Google profile name with a unique-suffix fallback. (email presence
+      // and verification were enforced right after token verification.)
       const localPart = email.split('@')[0]
       let base = (username || localPart).trim().slice(0, 24)
       if (base.length < 3) base = `${base}${localPart}user`.slice(0, 24)

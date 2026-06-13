@@ -22,9 +22,13 @@ let listCache: { date: string; quotes: DailyQuote[] } | null = null
 
 const todayKey = (): string => new Date().toISOString().slice(0, 10)
 
+// Hard timeout so a hung FavQs socket fails the request instead of holding it.
+const FETCH_TIMEOUT_MS = 8_000
+
 async function fetchQuoteOfTheDay(): Promise<DailyQuote> {
   const response = await fetch('https://favqs.com/api/qotd', {
     headers: { Authorization: `Token token="${process.env.FAVQS_API_KEY}"` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   })
   if (!response.ok) throw new Error(`FavQs HTTP ${response.status}`)
   const data = (await response.json()) as any
@@ -39,6 +43,7 @@ async function fetchQuoteOfTheDay(): Promise<DailyQuote> {
 async function fetchQuotesPage(page: number): Promise<DailyQuote[]> {
   const response = await fetch(`https://favqs.com/api/quotes?page=${page}`, {
     headers: { Authorization: `Token token="${process.env.FAVQS_API_KEY}"` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   })
   if (!response.ok) throw new Error(`FavQs HTTP ${response.status}`)
   const data = (await response.json()) as any

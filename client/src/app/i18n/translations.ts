@@ -151,6 +151,15 @@ export interface Translations {
   businessTrend: string;
   articlesPerDay: string;
   avgTone: string;
+  // Footer
+  footerTagline: string;
+  navigate: string;
+  newsSources: string;
+  legalInfo: string;
+  termsOfService: string;
+  privacyPolicy: string;
+  poweredByNLP: string;
+  allRightsReserved: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -303,6 +312,14 @@ export const translations: Record<Language, Translations> = {
     businessTrend: 'Business pulse — 14 days',
     articlesPerDay: 'Articles/day',
     avgTone: 'Avg tone',
+    footerTagline: 'AI-Powered News Intelligence',
+    navigate: 'Navigate',
+    newsSources: 'Sources',
+    legalInfo: 'Legal & Info',
+    termsOfService: 'Terms of Service',
+    privacyPolicy: 'Privacy Policy',
+    poweredByNLP: 'Powered by NLP Sentiment Analysis',
+    allRightsReserved: 'All rights reserved.',
   },
   id: {
     home: 'Beranda',
@@ -453,6 +470,14 @@ export const translations: Record<Language, Translations> = {
     businessTrend: 'Denyut bisnis — 14 hari',
     articlesPerDay: 'Artikel/hari',
     avgTone: 'Tone rata-rata',
+    footerTagline: 'Intelijen Berita Bertenaga AI',
+    navigate: 'Navigasi',
+    newsSources: 'Sumber',
+    legalInfo: 'Hukum & Info',
+    termsOfService: 'Ketentuan Layanan',
+    privacyPolicy: 'Kebijakan Privasi',
+    poweredByNLP: 'Didukung Analisis Sentimen NLP',
+    allRightsReserved: 'Hak cipta dilindungi.',
   },
   zhCN: {
     home: '首页',
@@ -603,6 +628,14 @@ export const translations: Record<Language, Translations> = {
     businessTrend: '商业脉搏 — 14 天',
     articlesPerDay: '每日文章',
     avgTone: '平均情绪',
+    footerTagline: 'AI 驱动的新闻智能',
+    navigate: '导航',
+    newsSources: '来源',
+    legalInfo: '法律与信息',
+    termsOfService: '服务条款',
+    privacyPolicy: '隐私政策',
+    poweredByNLP: '由 NLP 情感分析驱动',
+    allRightsReserved: '版权所有。',
   },
   zhTW: {
     home: '首頁',
@@ -753,5 +786,13 @@ export const translations: Record<Language, Translations> = {
     businessTrend: '商業脈搏 — 14 天',
     articlesPerDay: '每日文章',
     avgTone: '平均情緒',
+    footerTagline: 'AI 驅動的新聞智能',
+    navigate: '導覽',
+    newsSources: '來源',
+    legalInfo: '法律與資訊',
+    termsOfService: '服務條款',
+    privacyPolicy: '隱私政策',
+    poweredByNLP: '由 NLP 情感分析驅動',
+    allRightsReserved: '版權所有。',
   },
 };

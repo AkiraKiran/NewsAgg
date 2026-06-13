@@ -74,6 +74,18 @@ export const postSchema = z.object({
     .optional(),
 })
 
+// Bookmark payloads come from the client's article cards. articleId is usually
+// the 16-hex DB id but legacy fallbacks can be an encoded URL, so cap rather
+// than pattern-match. Optional fields stay undefined → SQL NULL.
+export const bookmarkSchema = z.object({
+  articleId: z.string().trim().min(1, 'articleId required').max(512),
+  articleUrl: z.string().trim().min(1, 'articleUrl required').max(2048),
+  articleTitle: z.string().max(512).optional(),
+  urlToImage: z.string().max(2048).optional(),
+  sourceName: z.string().max(128).optional(),
+  topic: z.string().max(64).optional(),
+})
+
 export const chatSchema = z.object({
   message: z.string().trim().min(1, 'message required').max(4000),
   articleContent: z.string().max(30000).optional().default(''),

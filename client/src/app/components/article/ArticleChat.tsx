@@ -50,10 +50,17 @@ export function ArticleChat({ article, isDark }: ArticleChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadHistory(storageKey));
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Tracks which article the state currently belongs to, so a reply that
+  // resolves after navigating to another article (component stays mounted)
+  // can't write the old article's conversation into the new one's state —
+  // the persist effect would then save it under the wrong storage key.
+  const activeKeyRef = useRef(storageKey);
 
   // Re-hydrate when navigating between articles (component stays mounted).
   useEffect(() => {
+    activeKeyRef.current = storageKey;
     setMessages(loadHistory(storageKey));
+    setLoading(false); // any in-flight reply belongs to the previous article
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
@@ -79,11 +86,16 @@ export function ArticleChat({ article, isDark }: ArticleChatProps) {
     const trimmed = input.trim();
     if (!trimmed || loading) return;
 
+    const keyAtSend = storageKey;
     const history = messages.slice(-REPLAYED_TURNS);
     const nextMessages: ChatMessage[] = [...messages, { role: 'user', content: trimmed }];
     setMessages(nextMessages);
     setInput('');
     setLoading(true);
+
+    // Stale guard: drop the result if the user navigated to a different
+    // article while this reply was in flight.
+    const stillCurrent = () => activeKeyRef.current === keyAtSend;
 
     try {
       const response = await fetch(`${API_BASE}/api/chat`, {
@@ -101,11 +113,15 @@ export function ArticleChat({ article, isDark }: ArticleChatProps) {
         typeof payload?.data === 'string'
           ? payload.data
           : payload?.data?.reply ?? payload?.message ?? 'No response received.';
-      setMessages([...nextMessages, { role: 'assistant', content: reply }]);
+      if (stillCurrent()) {
+        setMessages([...nextMessages, { role: 'assistant', content: reply }]);
+      }
     } catch {
-      setMessages([...nextMessages, { role: 'assistant', content: t.aiUnavailable }]);
+      if (stillCurrent()) {
+        setMessages([...nextMessages, { role: 'assistant', content: t.aiUnavailable }]);
+      }
     } finally {
-      setLoading(false);
+      if (stillCurrent()) setLoading(false);
     }
   };
 
